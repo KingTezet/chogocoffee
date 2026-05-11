@@ -9,14 +9,18 @@ const supabase = createClient(supabaseUrl, supabaseKey);
 // --- KONFIGURASI KEUANGAN & ADMIN ---
 const ADMIN_SECRET_KEY = 'CHOGO2024';
 const SUPER_ADMIN_ID = '1a24f87a-8ee9-4e19-857a-06ec616d1378';
+const OWNER_ID = 'f2b6a943-4f9e-4b2a-8d1c-99e52e25d2b7'; // UUID Iboo yang valid
+
 const GAJI_POKOK_STAFF = 35000;
 const BONUS_PER_ITEM = 500;
 const DENDA_PER_MENIT = 500;
 const ROYALTI_GM_PER_ITEM = 1500;
 
+// STAFF LIST
 const STAFF_LIST = [
   { id: 'c720fb23-e13f-4f5d-a2de-40989ae1df69', name: 'Vikry' },
   { id: 'a6b27457-78f6-474e-8f9b-36a45028a8be', name: 'Arief' },
+  { id: OWNER_ID, name: 'Iboo (Owner)' },
   { id: SUPER_ADMIN_ID, name: 'Moch Sugih Nugraha (GM)' }
 ];
 
@@ -35,7 +39,7 @@ export default function AdminDashboard() {
   // Form Pengeluaran
   const [expDesc, setExpDesc] = useState('');
   const [expAmount, setExpAmount] = useState('');
-  const [expQty, setExpQty] = useState('1'); // State baru untuk Qty
+  const [expQty, setExpQty] = useState('1'); 
   const [expCategory, setExpCategory] = useState('Bahan Baku');
 
   const fetchData = async () => {
@@ -87,9 +91,9 @@ export default function AdminDashboard() {
       description: expDesc, 
       amount: parseFloat(expAmount), 
       category: expCategory,
-      qty: parseInt(expQty) // Simpan Qty ke database
+      qty: parseInt(expQty) 
     });
-    setExpDesc(''); setExpAmount(''); setExpQty('1'); // Reset form
+    setExpDesc(''); setExpAmount(''); setExpQty('1'); 
     fetchData();
   };
 
@@ -106,7 +110,10 @@ export default function AdminDashboard() {
 
     const payrollByUser: Record<string, { name: string, role: string, records: any[], totalGaji: number }> = {};
     STAFF_LIST.forEach(staff => {
-      payrollByUser[staff.id] = { name: staff.name, role: staff.id === SUPER_ADMIN_ID ? 'GM' : 'Staff', records: [], totalGaji: 0 };
+      let roleLabel = 'Staff';
+      if (staff.id === SUPER_ADMIN_ID) roleLabel = 'GM';
+      if (staff.id === OWNER_ID) roleLabel = 'Owner';
+      payrollByUser[staff.id] = { name: staff.name, role: roleLabel, records: [], totalGaji: 0 };
     });
 
     let totalPayrollBeban = 0;
@@ -116,11 +123,17 @@ export default function AdminDashboard() {
       if (!userPayroll) return;
 
       let gajiPokok = 0, bonus = 0, denda = 0, totalBersih = 0;
+      
       if (log.user_id === SUPER_ADMIN_ID) {
         const totalItemsHariIni = dailyGlobalItems[dateKey] || 0;
         bonus = totalItemsHariIni * ROYALTI_GM_PER_ITEM;
         totalBersih = bonus;
         userPayroll.records.push({ id: log.id, date: dateKey, items: totalItemsHariIni, gajiPokok: 0, bonus, denda: 0, totalBersih });
+      } else if (log.user_id === OWNER_ID) {
+        gajiPokok = GAJI_POKOK_STAFF;
+        bonus = (log.items_sold || 0) * BONUS_PER_ITEM;
+        totalBersih = gajiPokok + bonus;
+        userPayroll.records.push({ id: log.id, date: dateKey, items: log.items_sold || 0, gajiPokok, bonus, denda: 0, totalBersih });
       } else {
         gajiPokok = GAJI_POKOK_STAFF;
         bonus = (log.items_sold || 0) * BONUS_PER_ITEM;
@@ -129,6 +142,7 @@ export default function AdminDashboard() {
         totalBersih = kalkulasiKotor < 0 ? 0 : kalkulasiKotor; 
         userPayroll.records.push({ id: log.id, date: dateKey, items: log.items_sold || 0, gajiPokok, bonus, denda, totalBersih });
       }
+      
       userPayroll.totalGaji += totalBersih;
       totalPayrollBeban += totalBersih;
     });
@@ -156,7 +170,7 @@ export default function AdminDashboard() {
           <div className="w-12 h-12 bg-[#3A2A1A] rounded-full mx-auto mb-6 flex items-center justify-center text-white text-xl">🔐</div>
           <h1 className="text-2xl font-serif font-bold text-[#3A2A1A] mb-2">Executive Portal</h1>
           <form onSubmit={handleLogin} className="space-y-4 mt-8">
-            <input type="password" placeholder="Passcode" className="w-full border border-[#EBE5D9] p-4 rounded-2xl text-center text-lg tracking-[0.5em] outline-none focus:border-[#C69C6D] bg-[#FAF8F5]" value={passcode} onChange={(e) => setPasscode(e.target.value)} />
+            <input type="password" placeholder="Passcode" className="w-full border border-[#EBE5D9] p-4 rounded-2xl text-center text-lg tracking-[0.5em] text-[#3A2A1A] placeholder-gray-400 outline-none focus:border-[#C69C6D] bg-[#FAF8F5]" value={passcode} onChange={(e) => setPasscode(e.target.value)} />
             <button className="w-full bg-[#3A2A1A] text-white py-4 rounded-2xl font-bold uppercase tracking-widest text-xs hover:bg-[#C69C6D] transition-all">Unlock ERP</button>
           </form>
         </div>
@@ -190,6 +204,7 @@ export default function AdminDashboard() {
           ))}
         </div>
 
+        {/* --- TAB 1: ABSENSI & KASIR --- */}
         {activeTab === 'LOGS' && (
           <div className="bg-white rounded-[32px] border border-[#EBE5D9] overflow-hidden shadow-sm p-2">
             <div className="overflow-x-auto">
@@ -199,6 +214,7 @@ export default function AdminDashboard() {
                     <th className="p-4 text-[10px] font-black text-[#8C7A6B] uppercase tracking-widest">Tanggal</th>
                     <th className="p-4 text-[10px] font-black text-[#8C7A6B] uppercase tracking-widest">Nama</th>
                     <th className="p-4 text-[10px] font-black text-[#8C7A6B] uppercase tracking-widest">In / Out</th>
+                    <th className="p-4 text-[10px] font-black text-[#8C7A6B] uppercase tracking-widest">Bukti & Lokasi</th>
                     <th className="p-4 text-[10px] font-black text-[#8C7A6B] uppercase tracking-widest">Telat / Denda</th>
                     <th className="p-4 text-[10px] font-black text-[#8C7A6B] uppercase tracking-widest">Item / Revenue</th>
                     <th className="p-4 text-[10px] font-black text-[#8C7A6B] uppercase tracking-widest text-center">Action</th>
@@ -209,8 +225,28 @@ export default function AdminDashboard() {
                     <tr key={log.id} className="hover:bg-[#FCF9F4] transition-colors">
                       <td className="p-4 text-xs font-bold">{formatDate(log.created_at)}</td>
                       <td className="p-4 font-black uppercase text-xs">{log.staff_name}</td>
-                      <td className="p-4 text-xs"><span className="text-[#2D5A2D] font-bold">{formatTime(log.created_at)}</span> - <span className="text-[#8A2E2E] font-bold">{formatTime(log.clock_out_time)}</span></td>
-                      <td className="p-4 text-xs">{log.user_id === SUPER_ADMIN_ID ? '-' : (log.late_minutes > 0 ? <div><p className="text-[#8A2E2E] font-bold">Telat {log.late_minutes}m</p><p className="text-[10px] text-gray-500">{formatRp(log.late_minutes * DENDA_PER_MENIT)}</p></div> : <span className="text-[#2D5A2D] font-bold">Tepat Waktu</span>)}</td>
+                      <td className="p-4 text-xs">
+                        <span className="text-[#2D5A2D] font-bold">{formatTime(log.created_at)}</span> - <span className="text-[#8A2E2E] font-bold">{formatTime(log.clock_out_time)}</span>
+                      </td>
+                      
+                      {/* KOLOM BUKTI FOTO DAN LOKASI DIKEMBALIKAN */}
+                      <td className="p-4">
+                        <div className="flex flex-col gap-2">
+                          {log.clock_in_photo_url ? (
+                            <a href={log.clock_in_photo_url} target="_blank" rel="noopener noreferrer">
+                              <img src={log.clock_in_photo_url} alt="Selfie" className="w-10 h-10 rounded-lg object-cover border border-[#EBE5D9] hover:scale-125 transition-transform cursor-zoom-in" />
+                            </a>
+                          ) : <span className="text-[10px] text-gray-400 font-bold">No Photo</span>}
+                          
+                          {(log.in_latitude && log.in_longitude) ? (
+                            <a href={`https://maps.google.com/?q=${log.in_latitude},${log.in_longitude}`} target="_blank" rel="noopener noreferrer" className="text-[9px] font-black text-[#C69C6D] hover:underline uppercase tracking-widest">
+                              📍 Peta
+                            </a>
+                          ) : null}
+                        </div>
+                      </td>
+
+                      <td className="p-4 text-xs">{(log.user_id === SUPER_ADMIN_ID || log.user_id === OWNER_ID) ? '-' : (log.late_minutes > 0 ? <div><p className="text-[#8A2E2E] font-bold">Telat {log.late_minutes}m</p><p className="text-[10px] text-gray-500">{formatRp(log.late_minutes * DENDA_PER_MENIT)}</p></div> : <span className="text-[#2D5A2D] font-bold">Tepat Waktu</span>)}</td>
                       <td className="p-4"><div><p className="text-xs font-bold">{log.items_sold || 0} Item</p><p className="text-[10px] font-black text-[#C69C6D]">{formatRp(log.revenue_generated || 0)}</p></div></td>
                       <td className="p-4 text-center"><button onClick={() => handleDeleteLog(log.id)} className="bg-[#FDF2F2] text-[#8A2E2E] px-3 py-1.5 rounded-lg text-[10px] font-bold uppercase">Hapus</button></td>
                     </tr>
@@ -221,6 +257,7 @@ export default function AdminDashboard() {
           </div>
         )}
 
+        {/* --- TAB 2: PAYROLL --- */}
         {activeTab === 'PAYROLL' && (
           <div className="space-y-8">
             {payrollData.map((user, idx) => (
@@ -235,6 +272,7 @@ export default function AdminDashboard() {
           </div>
         )}
 
+        {/* --- TAB 3: FINANCE --- */}
         {activeTab === 'FINANCE' && (
           <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
             <div className="lg:col-span-2 space-y-8">
@@ -244,7 +282,7 @@ export default function AdminDashboard() {
                 <div className="bg-[#3A2A1A] p-8 rounded-[24px] col-span-2 text-white relative overflow-hidden"><p className="text-xs font-black text-[#C69C6D] uppercase mb-2">Laba Bersih (Dividen)</p><h3 className="text-5xl font-black">{formatRp(financeData.netProfit)}</h3><div className="absolute right-0 bottom-0 text-9xl opacity-10 translate-y-8">📈</div></div>
               </div>
 
-              {/* RINCIAN PENGELUARAN (DENGAN QTY) */}
+              {/* RINCIAN PENGELUARAN */}
               <div className="bg-white rounded-[24px] border border-[#EBE5D9] p-6">
                 <h3 className="font-black uppercase text-sm mb-6">Rincian Pengeluaran Bulan {MONTHS[filterMonth]}</h3>
                 <div className="overflow-x-auto">
@@ -307,7 +345,7 @@ export default function AdminDashboard() {
               </div>
             </div>
 
-            {/* FORM INPUT PENGELUARAN (DENGAN QTY) */}
+            {/* FORM INPUT PENGELUARAN */}
             <div className="bg-white p-6 rounded-[24px] border border-[#EBE5D9] h-max sticky top-8">
               <h3 className="font-black uppercase text-sm mb-6">Input Nota Keluar</h3>
               <form onSubmit={handleAddExpense} className="space-y-4">
