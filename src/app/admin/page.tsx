@@ -9,22 +9,30 @@ const supabase = createClient(supabaseUrl, supabaseKey);
 // --- KONFIGURASI KEUANGAN & ADMIN ---
 const ADMIN_SECRET_KEY = 'CHOGO2024';
 const SUPER_ADMIN_ID = '1a24f87a-8ee9-4e19-857a-06ec616d1378';
-const OWNER_ID = 'f2b6a943-4f9e-4b2a-8d1c-99e52e25d2b7'; // UUID Iboo yang valid
+const OWNER_ID = 'f2b6a943-4f9e-4b2a-8d1c-99e52e25d2b7';
 
 const GAJI_POKOK_STAFF = 35000;
 const BONUS_PER_ITEM = 500;
 const DENDA_PER_MENIT = 500;
 const ROYALTI_GM_PER_ITEM = 1500;
+const PERSENTASE_DIVIDEN_OWNER = 0.5; // 50% untuk Owner, 50% masuk Kas Chogo
 
-// STAFF LIST
+// STAFF LIST (ADIN SUDAH DITAMBAHKAN)
 const STAFF_LIST = [
   { id: 'c720fb23-e13f-4f5d-a2de-40989ae1df69', name: 'Vikry' },
   { id: 'a6b27457-78f6-474e-8f9b-36a45028a8be', name: 'Arief' },
+  { id: 'b1935c42-8a9b-4e31-a7d2-6f2c3a5b8d91', name: 'Adin' },
   { id: OWNER_ID, name: 'Iboo (Owner)' },
   { id: SUPER_ADMIN_ID, name: 'Moch Sugih Nugraha (GM)' }
 ];
 
 const MONTHS = ['Januari', 'Februari', 'Maret', 'April', 'Mei', 'Juni', 'Juli', 'Agustus', 'September', 'Oktober', 'November', 'Desember'];
+
+// FUNGSI FIX ZONA WAKTU LOKAL
+const getLocalDateString = (dateStr: string) => {
+  const d = new Date(dateStr);
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+};
 
 export default function AdminDashboard() {
   const [passcode, setPasscode] = useState('');
@@ -103,7 +111,7 @@ export default function AdminDashboard() {
 
     const dailyGlobalItems: Record<string, number> = {};
     filteredLogs.forEach(log => {
-      const dateKey = new Date(log.created_at).toISOString().split('T')[0];
+      const dateKey = getLocalDateString(log.created_at);
       if (!dailyGlobalItems[dateKey]) dailyGlobalItems[dateKey] = 0;
       if (log.user_id !== SUPER_ADMIN_ID) dailyGlobalItems[dateKey] += (log.items_sold || 0);
     });
@@ -117,30 +125,31 @@ export default function AdminDashboard() {
     });
 
     let totalPayrollBeban = 0;
+    
     filteredLogs.forEach(log => {
-      const dateKey = new Date(log.created_at).toISOString().split('T')[0];
+      const dateKey = getLocalDateString(log.created_at);
       const userPayroll = payrollByUser[log.user_id];
       if (!userPayroll) return;
 
+      const globalItemsHariIni = dailyGlobalItems[dateKey] || 0; 
       let gajiPokok = 0, bonus = 0, denda = 0, totalBersih = 0;
       
       if (log.user_id === SUPER_ADMIN_ID) {
-        const totalItemsHariIni = dailyGlobalItems[dateKey] || 0;
-        bonus = totalItemsHariIni * ROYALTI_GM_PER_ITEM;
+        bonus = globalItemsHariIni * ROYALTI_GM_PER_ITEM;
         totalBersih = bonus;
-        userPayroll.records.push({ id: log.id, date: dateKey, items: totalItemsHariIni, gajiPokok: 0, bonus, denda: 0, totalBersih });
+        userPayroll.records.push({ id: log.id, date: dateKey, items: globalItemsHariIni, gajiPokok: 0, bonus, denda: 0, totalBersih });
       } else if (log.user_id === OWNER_ID) {
         gajiPokok = GAJI_POKOK_STAFF;
-        bonus = (log.items_sold || 0) * BONUS_PER_ITEM;
+        bonus = globalItemsHariIni * BONUS_PER_ITEM;
         totalBersih = gajiPokok + bonus;
-        userPayroll.records.push({ id: log.id, date: dateKey, items: log.items_sold || 0, gajiPokok, bonus, denda: 0, totalBersih });
+        userPayroll.records.push({ id: log.id, date: dateKey, items: globalItemsHariIni, gajiPokok, bonus, denda: 0, totalBersih });
       } else {
         gajiPokok = GAJI_POKOK_STAFF;
-        bonus = (log.items_sold || 0) * BONUS_PER_ITEM;
+        bonus = globalItemsHariIni * BONUS_PER_ITEM;
         denda = (log.late_minutes || 0) * DENDA_PER_MENIT;
         let kalkulasiKotor = gajiPokok + bonus - denda;
         totalBersih = kalkulasiKotor < 0 ? 0 : kalkulasiKotor; 
-        userPayroll.records.push({ id: log.id, date: dateKey, items: log.items_sold || 0, gajiPokok, bonus, denda, totalBersih });
+        userPayroll.records.push({ id: log.id, date: dateKey, items: globalItemsHariIni, gajiPokok, bonus, denda, totalBersih });
       }
       
       userPayroll.totalGaji += totalBersih;
@@ -148,12 +157,19 @@ export default function AdminDashboard() {
     });
 
     const totalRevenue = filteredLogs.reduce((sum, log) => sum + (log.revenue_generated || 0), 0);
-    const totalExpensesCalc = filteredExpenses.reduce((sum, exp) => sum + (exp.amount || 0), 0);
+    const totalExpensesCalc = filteredExpenses.reduce((sum, exp) => {
+      if (exp.category === 'Uang Kembalian (Non-Expense)') return sum;
+      return sum + (exp.amount || 0);
+    }, 0);
+    
     const netProfit = totalRevenue - totalExpensesCalc - totalPayrollBeban;
+    
+    const dividenOwner = netProfit * PERSENTASE_DIVIDEN_OWNER;
+    const kasChogo = netProfit - dividenOwner;
 
     return {
       payrollData: Object.values(payrollByUser).filter(u => u.records.length > 0),
-      financeData: { totalRevenue, totalExpenses: totalExpensesCalc, totalPayrollBeban, netProfit },
+      financeData: { totalRevenue, totalExpenses: totalExpensesCalc, totalPayrollBeban, netProfit, dividenOwner, kasChogo },
       currentMonthLogs: filteredLogs,
       currentMonthExpenses: filteredExpenses
     };
@@ -211,11 +227,11 @@ export default function AdminDashboard() {
               <table className="w-full text-left border-collapse">
                 <thead>
                   <tr className="bg-[#FAF8F5] border-b border-[#EBE5D9]">
-                    <th className="p-4 text-[10px] font-black text-[#8C7A6B] uppercase tracking-widest">Tanggal</th>
+                    <th className="p-4 text-[10px] font-black text-[#8C7A6B] uppercase tracking-widest">Tanggal (Shift)</th>
                     <th className="p-4 text-[10px] font-black text-[#8C7A6B] uppercase tracking-widest">Nama</th>
                     <th className="p-4 text-[10px] font-black text-[#8C7A6B] uppercase tracking-widest">In / Out</th>
                     <th className="p-4 text-[10px] font-black text-[#8C7A6B] uppercase tracking-widest">Bukti & Lokasi</th>
-                    <th className="p-4 text-[10px] font-black text-[#8C7A6B] uppercase tracking-widest">Telat / Denda</th>
+                    <th className="p-4 text-[10px] font-black text-[#8C7A6B] uppercase tracking-widest">Catatan / Pekerjaan</th>
                     <th className="p-4 text-[10px] font-black text-[#8C7A6B] uppercase tracking-widest">Item / Revenue</th>
                     <th className="p-4 text-[10px] font-black text-[#8C7A6B] uppercase tracking-widest text-center">Action</th>
                   </tr>
@@ -228,8 +244,6 @@ export default function AdminDashboard() {
                       <td className="p-4 text-xs">
                         <span className="text-[#2D5A2D] font-bold">{formatTime(log.created_at)}</span> - <span className="text-[#8A2E2E] font-bold">{formatTime(log.clock_out_time)}</span>
                       </td>
-                      
-                      {/* KOLOM BUKTI FOTO DAN LOKASI DIKEMBALIKAN */}
                       <td className="p-4">
                         <div className="flex flex-col gap-2">
                           {log.clock_in_photo_url ? (
@@ -237,7 +251,6 @@ export default function AdminDashboard() {
                               <img src={log.clock_in_photo_url} alt="Selfie" className="w-10 h-10 rounded-lg object-cover border border-[#EBE5D9] hover:scale-125 transition-transform cursor-zoom-in" />
                             </a>
                           ) : <span className="text-[10px] text-gray-400 font-bold">No Photo</span>}
-                          
                           {(log.in_latitude && log.in_longitude) ? (
                             <a href={`https://maps.google.com/?q=${log.in_latitude},${log.in_longitude}`} target="_blank" rel="noopener noreferrer" className="text-[9px] font-black text-[#C69C6D] hover:underline uppercase tracking-widest">
                               📍 Peta
@@ -245,8 +258,12 @@ export default function AdminDashboard() {
                           ) : null}
                         </div>
                       </td>
+                      
+                      {/* INI KOLOM BARU UNTUK DESKRIPSI PEKERJAAN */}
+                      <td className="p-4 text-[10px] font-bold text-[#8C7A6B] max-w-[150px]">
+                        {log.notes || log.keterangan || log.deskripsi || log.pekerjaan || log.work_description || '-'}
+                      </td>
 
-                      <td className="p-4 text-xs">{(log.user_id === SUPER_ADMIN_ID || log.user_id === OWNER_ID) ? '-' : (log.late_minutes > 0 ? <div><p className="text-[#8A2E2E] font-bold">Telat {log.late_minutes}m</p><p className="text-[10px] text-gray-500">{formatRp(log.late_minutes * DENDA_PER_MENIT)}</p></div> : <span className="text-[#2D5A2D] font-bold">Tepat Waktu</span>)}</td>
                       <td className="p-4"><div><p className="text-xs font-bold">{log.items_sold || 0} Item</p><p className="text-[10px] font-black text-[#C69C6D]">{formatRp(log.revenue_generated || 0)}</p></div></td>
                       <td className="p-4 text-center"><button onClick={() => handleDeleteLog(log.id)} className="bg-[#FDF2F2] text-[#8A2E2E] px-3 py-1.5 rounded-lg text-[10px] font-bold uppercase">Hapus</button></td>
                     </tr>
@@ -266,7 +283,32 @@ export default function AdminDashboard() {
                   <div><h2 className="text-2xl font-serif font-black uppercase">{user.name}</h2><p className="text-xs font-bold text-[#C69C6D] uppercase">Role: {user.role}</p></div>
                   <div className="text-right"><p className="text-[10px] font-black text-[#8C7A6B] uppercase mb-1">Total Gaji {MONTHS[filterMonth]}</p><h3 className="text-2xl font-black text-[#2D5A2D]">{formatRp(user.totalGaji)}</h3></div>
                 </div>
-                <div className="overflow-x-auto"><table className="w-full text-left border-collapse"><thead className="bg-[#FAF8F5]"><tr className="text-[10px] font-black text-[#8C7A6B] uppercase"><th className="p-3">Tanggal</th><th className="p-3 text-center">Item</th>{user.role !== 'GM' && <th className="p-3 text-right">Gaji Pokok</th>}<th className="p-3 text-right">Bonus</th>{user.role !== 'GM' && <th className="p-3 text-right">Denda</th>}<th className="p-3 text-right">Total Bersih</th></tr></thead><tbody className="divide-y divide-[#F0EBE1]">{user.records.map((rec, i) => (<tr key={i} className="hover:bg-[#FCF9F4] text-xs"><td className="p-3 font-bold">{formatDate(rec.date)}</td><td className="p-3 font-bold text-center">{rec.items}</td>{user.role !== 'GM' && <td className="p-3 text-right">{formatRp(rec.gajiPokok)}</td>}<td className="p-3 font-bold text-[#2D5A2D] text-right">+{formatRp(rec.bonus)}</td>{user.role !== 'GM' && <td className="p-3 font-bold text-[#8A2E2E] text-right">-{formatRp(rec.denda)}{rec.denda > 0 && <button onClick={() => handleResetDenda(rec.id)} className="block ml-auto mt-1 text-[8px] bg-[#EBE5D9] px-2 py-0.5 rounded uppercase">Reset</button>}</td>}<td className="p-3 font-black text-right">{formatRp(rec.totalBersih)}</td></tr>))}</tbody></table></div>
+                <div className="overflow-x-auto">
+                  <table className="w-full text-left border-collapse">
+                    <thead className="bg-[#FAF8F5]">
+                      <tr className="text-[10px] font-black text-[#8C7A6B] uppercase">
+                        <th className="p-3">Tanggal</th>
+                        <th className="p-3 text-center">Item (Global)</th>
+                        {user.role !== 'GM' && <th className="p-3 text-right">Gaji Pokok</th>}
+                        <th className="p-3 text-right">Bonus/Royalti</th>
+                        {user.role !== 'GM' && <th className="p-3 text-right">Denda</th>}
+                        <th className="p-3 text-right">Total Bersih</th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-[#F0EBE1]">
+                      {user.records.map((rec, i) => (
+                        <tr key={i} className="hover:bg-[#FCF9F4] text-xs">
+                          <td className="p-3 font-bold">{formatDate(rec.date)}</td>
+                          <td className="p-3 font-bold text-center text-[#C69C6D]">{rec.items}</td> 
+                          {user.role !== 'GM' && <td className="p-3 text-right">{formatRp(rec.gajiPokok)}</td>}
+                          <td className="p-3 font-bold text-[#2D5A2D] text-right">+{formatRp(rec.bonus)}</td>
+                          {user.role !== 'GM' && <td className="p-3 font-bold text-[#8A2E2E] text-right">-{formatRp(rec.denda)}{rec.denda > 0 && <button onClick={() => handleResetDenda(rec.id)} className="block ml-auto mt-1 text-[8px] bg-[#EBE5D9] px-2 py-0.5 rounded uppercase">Reset</button>}</td>}
+                          <td className="p-3 font-black text-right">{formatRp(rec.totalBersih)}</td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
               </div>
             ))}
           </div>
@@ -276,10 +318,21 @@ export default function AdminDashboard() {
         {activeTab === 'FINANCE' && (
           <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
             <div className="lg:col-span-2 space-y-8">
-              <div className="grid grid-cols-2 gap-4">
-                <div className="bg-white p-6 rounded-[24px] border border-[#EBE5D9]"><p className="text-[10px] font-black text-[#8C7A6B] uppercase mb-2">Total Pendapatan</p><h3 className="text-3xl font-black text-[#2D5A2D]">{formatRp(financeData.totalRevenue)}</h3></div>
-                <div className="bg-white p-6 rounded-[24px] border border-[#EBE5D9]"><p className="text-[10px] font-black text-[#8C7A6B] uppercase mb-2">Beban Gaji</p><h3 className="text-3xl font-black text-[#8A2E2E]">{formatRp(financeData.totalPayrollBeban)}</h3></div>
-                <div className="bg-[#3A2A1A] p-8 rounded-[24px] col-span-2 text-white relative overflow-hidden"><p className="text-xs font-black text-[#C69C6D] uppercase mb-2">Laba Bersih (Dividen)</p><h3 className="text-5xl font-black">{formatRp(financeData.netProfit)}</h3><div className="absolute right-0 bottom-0 text-9xl opacity-10 translate-y-8">📈</div></div>
+              
+              <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+                <div className="bg-white p-6 rounded-[24px] border border-[#EBE5D9] col-span-2"><p className="text-[10px] font-black text-[#8C7A6B] uppercase mb-2">Total Pendapatan</p><h3 className="text-3xl font-black text-[#2D5A2D]">{formatRp(financeData.totalRevenue)}</h3></div>
+                <div className="bg-white p-6 rounded-[24px] border border-[#EBE5D9] col-span-2"><p className="text-[10px] font-black text-[#8C7A6B] uppercase mb-2">Beban Operasional & Gaji</p><h3 className="text-3xl font-black text-[#8A2E2E]">{formatRp(financeData.totalExpenses + financeData.totalPayrollBeban)}</h3></div>
+                
+                <div className="bg-[#3A2A1A] p-6 rounded-[24px] col-span-2 text-white relative overflow-hidden">
+                  <p className="text-xs font-black text-[#C69C6D] uppercase mb-1">Kas Chogo (50%)</p>
+                  <h3 className="text-4xl font-black">{formatRp(financeData.kasChogo)}</h3>
+                  <div className="absolute right-0 bottom-0 text-6xl opacity-10 translate-y-4">☕</div>
+                </div>
+                <div className="bg-[#C69C6D] p-6 rounded-[24px] col-span-2 text-white relative overflow-hidden">
+                  <p className="text-xs font-black text-[#3A2A1A] uppercase mb-1">Dividen Owner (50%)</p>
+                  <h3 className="text-4xl font-black text-[#3A2A1A]">{formatRp(financeData.dividenOwner)}</h3>
+                  <div className="absolute right-0 bottom-0 text-6xl opacity-10 translate-y-4">📈</div>
+                </div>
               </div>
 
               {/* RINCIAN PENGELUARAN */}
@@ -304,41 +357,10 @@ export default function AdminDashboard() {
                           <td className="py-3 text-[10px] font-black uppercase text-[#C69C6D]">{exp.category}</td>
                           <td className="py-3">{exp.description}</td>
                           <td className="py-3 text-center font-bold">{exp.qty || 1}</td>
-                          <td className="py-3 text-right font-black text-[#8A2E2E]">{formatRp(exp.amount)}</td>
+                          <td className={`py-3 text-right font-black ${exp.category === 'Uang Kembalian (Non-Expense)' ? 'text-[#2D5A2D]' : 'text-[#8A2E2E]'}`}>{formatRp(exp.amount)}</td>
                           <td className="py-3 text-center"><button onClick={() => handleDeleteExpense(exp.id)} className="text-red-400 hover:text-red-600 font-black uppercase text-[10px]">Hapus</button></td>
                         </tr>
                       ))}
-                    </tbody>
-                  </table>
-                </div>
-              </div>
-
-              <div className="bg-white rounded-[24px] border border-[#EBE5D9] p-6 shadow-sm">
-                <h3 className="font-black uppercase text-sm mb-6 flex items-center gap-2">
-                  <span className="w-2 h-2 bg-[#C69C6D] rounded-full"></span>
-                  Rincian Gaji & Royalti Bulan {MONTHS[filterMonth]}
-                </h3>
-                <div className="overflow-x-auto">
-                  <table className="w-full text-left border-collapse">
-                    <thead>
-                      <tr className="border-b-2 border-[#EBE5D9] text-[10px] font-black text-[#8C7A6B] uppercase tracking-widest">
-                        <th className="pb-3">Nama Penerima</th>
-                        <th className="pb-3">Status</th>
-                        <th className="pb-3 text-right">Total Akumulasi</th>
-                      </tr>
-                    </thead>
-                    <tbody className="divide-y divide-[#F0EBE1]">
-                      {payrollData.map((u, i) => (
-                        <tr key={i} className="hover:bg-[#FCF9F4] transition-colors">
-                          <td className="py-4 text-xs font-black uppercase tracking-tight">{u.name}</td>
-                          <td className="py-4"><span className={`text-[9px] font-bold px-2 py-1 rounded-full uppercase ${u.role === 'GM' ? 'bg-[#3A2A1A] text-white' : 'bg-[#EBE5D9] text-[#3A2A1A]'}`}>{u.role}</span></td>
-                          <td className="py-4 text-sm font-black text-right text-[#3A2A1A]">{formatRp(u.totalGaji)}</td>
-                        </tr>
-                      ))}
-                      <tr className="bg-[#FAF8F5] font-black">
-                        <td colSpan={2} className="py-4 pl-4 text-xs uppercase tracking-widest">Total Beban Gaji</td>
-                        <td className="py-4 pr-4 text-right text-[#8A2E2E]">{formatRp(financeData.totalPayrollBeban)}</td>
-                      </tr>
                     </tbody>
                   </table>
                 </div>
@@ -354,6 +376,7 @@ export default function AdminDashboard() {
                   <select value={expCategory} onChange={(e) => setExpCategory(e.target.value)} className="w-full mt-1 border border-[#EBE5D9] p-3 rounded-xl text-xs font-bold bg-[#FAF8F5] outline-none">
                     <option value="Bahan Baku">Bahan Baku</option>
                     <option value="Operasional">Operasional</option>
+                    <option value="Uang Kembalian (Non-Expense)">Uang Kembalian (Modal Kasir)</option>
                   </select>
                 </div>
                 <div>

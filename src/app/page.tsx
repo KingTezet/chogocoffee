@@ -168,11 +168,12 @@ export default function LandingPage() {
               Get Started <span className="text-xl">↗</span>
             </button>
           </div>
-          <div className="absolute bottom-0 left-1/2 -translate-x-1/2 z-20 w-[90%] max-w-[350px] md:max-w-[750px] pointer-events-none">
+          {/* C. SOSOK BARISTA (FIX LAPTOP BESAR, HP PAS) */}
+<div className="absolute bottom-0 left-0 w-full flex justify-center items-end z-20 pointer-events-none">
   <img 
     src="/hero.png" 
     alt="Barista" 
-    className="w-full h-auto object-contain object-bottom scale-105 md:scale-110 origin-bottom" 
+    className="w-[90%] max-w-[380px] md:max-w-[750px] h-auto max-h-[60vh] md:max-h-none object-contain object-bottom" 
   />
 </div>
           <div className="absolute right-10 md:right-20 bottom-10 md:bottom-20 z-30 flex flex-col items-end bg-[#3A2A1A]/30 backdrop-blur-md p-4 rounded-3xl border border-white/10">

@@ -17,8 +17,9 @@ const OWNER_ID = 'f2b6a943-4f9e-4b2a-8d1c-99e52e25d2b7'; // ID Khusus Iboo
 const STAFF_LIST = [
   { id: 'c720fb23-e13f-4f5d-a2de-40989ae1df69', name: 'Vikry' },
   { id: 'a6b27457-78f6-474e-8f9b-36a45028a8be', name: 'Arief' },
+  { id: 'b1935c42-8a9b-4e31-a7d2-6f2c3a5b8d91', name: 'Adin' }, // <-- Adin ditambahkan
   { id: OWNER_ID, name: 'Iboo (Owner)' },
-  { id: SUPER_ADMIN_ID, name: 'Moch Sugih Nugraha (GM)' } // GM
+  { id: SUPER_ADMIN_ID, name: 'Moch Sugih Nugraha (GM)' }
 ];
 
 const SHIFTS = [
