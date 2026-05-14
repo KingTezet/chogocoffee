@@ -22,9 +22,10 @@ const STAFF_LIST = [
   { id: SUPER_ADMIN_ID, name: 'Moch Sugih Nugraha (GM)' }
 ];
 
+// --- JADWAL SHIFT (SUDAH DIUPDATE) ---
 const SHIFTS = [
   { id: 'PAGI', label: 'Shift Pagi (07:00 - 15:00)', start: '07:00' },
-  { id: 'MIDDLE', label: 'Shift Middle (11:00 - 19:00)', start: '11:00' },
+  { id: 'MIDDLE', label: 'Shift Middle (11:00 - 20:00)', start: '11:00' }, // <-- Label diubah ke jam 20:00
   { id: 'SIANG', label: 'Shift Siang (15:00 - 23:00)', start: '15:00' },
 ];
 

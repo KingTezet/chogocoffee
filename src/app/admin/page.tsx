@@ -16,8 +16,9 @@ const BONUS_PER_ITEM = 500;
 const DENDA_PER_MENIT = 500;
 const ROYALTI_GM_PER_ITEM = 1500;
 const PERSENTASE_DIVIDEN_OWNER = 0.5; // 50% untuk Owner, 50% masuk Kas Chogo
+const MODAL_KASIR_TETAP = 100000; // Uang yang selalu ada di laci (kembalian awal)
 
-// STAFF LIST (ADIN SUDAH DITAMBAHKAN)
+// STAFF LIST
 const STAFF_LIST = [
   { id: 'c720fb23-e13f-4f5d-a2de-40989ae1df69', name: 'Vikry' },
   { id: 'a6b27457-78f6-474e-8f9b-36a45028a8be', name: 'Arief' },
@@ -157,19 +158,32 @@ export default function AdminDashboard() {
     });
 
     const totalRevenue = filteredLogs.reduce((sum, log) => sum + (log.revenue_generated || 0), 0);
-    const totalExpensesCalc = filteredExpenses.reduce((sum, exp) => {
-      if (exp.category === 'Uang Kembalian (Non-Expense)') return sum;
-      return sum + (exp.amount || 0);
-    }, 0);
+    
+    let totalExpensesCalc = 0; 
+    let totalGajiDibayar = 0;  
+
+    filteredExpenses.forEach(exp => {
+      if (exp.category === 'Pembayaran Gaji & Royalti') {
+        totalGajiDibayar += (exp.amount || 0);
+      } else if (exp.category !== 'Uang Kembalian (Non-Expense)') {
+        totalExpensesCalc += (exp.amount || 0);
+      }
+    });
     
     const netProfit = totalRevenue - totalExpensesCalc - totalPayrollBeban;
-    
     const dividenOwner = netProfit * PERSENTASE_DIVIDEN_OWNER;
     const kasChogo = netProfit - dividenOwner;
 
+    // LOGIKA UANG FISIK (Dipisah antara dompet dan laci)
+    const uangDompet = totalRevenue - totalExpensesCalc - totalGajiDibayar; // Uang hasil jualan yg dipegang owner
+    const uangGrandTotal = uangDompet + MODAL_KASIR_TETAP; // Total Dompet + Laci
+
+    let danaDitahan = totalPayrollBeban - totalGajiDibayar;
+    if (danaDitahan < 0) danaDitahan = 0; 
+
     return {
       payrollData: Object.values(payrollByUser).filter(u => u.records.length > 0),
-      financeData: { totalRevenue, totalExpenses: totalExpensesCalc, totalPayrollBeban, netProfit, dividenOwner, kasChogo },
+      financeData: { totalRevenue, totalExpenses: totalExpensesCalc, totalPayrollBeban, netProfit, dividenOwner, kasChogo, uangDompet, uangGrandTotal, danaDitahan, totalGajiDibayar },
       currentMonthLogs: filteredLogs,
       currentMonthExpenses: filteredExpenses
     };
@@ -220,7 +234,7 @@ export default function AdminDashboard() {
           ))}
         </div>
 
-        {/* --- TAB 1: ABSENSI & KASIR --- */}
+        {/* --- TAB 1: ABSENSI --- */}
         {activeTab === 'LOGS' && (
           <div className="bg-white rounded-[32px] border border-[#EBE5D9] overflow-hidden shadow-sm p-2">
             <div className="overflow-x-auto">
@@ -251,19 +265,9 @@ export default function AdminDashboard() {
                               <img src={log.clock_in_photo_url} alt="Selfie" className="w-10 h-10 rounded-lg object-cover border border-[#EBE5D9] hover:scale-125 transition-transform cursor-zoom-in" />
                             </a>
                           ) : <span className="text-[10px] text-gray-400 font-bold">No Photo</span>}
-                          {(log.in_latitude && log.in_longitude) ? (
-                            <a href={`https://maps.google.com/?q=${log.in_latitude},${log.in_longitude}`} target="_blank" rel="noopener noreferrer" className="text-[9px] font-black text-[#C69C6D] hover:underline uppercase tracking-widest">
-                              📍 Peta
-                            </a>
-                          ) : null}
                         </div>
                       </td>
-                      
-                      {/* INI KOLOM BARU UNTUK DESKRIPSI PEKERJAAN */}
-                      <td className="p-4 text-[10px] font-bold text-[#8C7A6B] max-w-[150px]">
-                        {log.notes || log.keterangan || log.deskripsi || log.pekerjaan || log.work_description || '-'}
-                      </td>
-
+                      <td className="p-4 text-[10px] font-bold text-[#8C7A6B] max-w-[150px]">{log.notes || '-'}</td>
                       <td className="p-4"><div><p className="text-xs font-bold">{log.items_sold || 0} Item</p><p className="text-[10px] font-black text-[#C69C6D]">{formatRp(log.revenue_generated || 0)}</p></div></td>
                       <td className="p-4 text-center"><button onClick={() => handleDeleteLog(log.id)} className="bg-[#FDF2F2] text-[#8A2E2E] px-3 py-1.5 rounded-lg text-[10px] font-bold uppercase">Hapus</button></td>
                     </tr>
@@ -302,7 +306,7 @@ export default function AdminDashboard() {
                           <td className="p-3 font-bold text-center text-[#C69C6D]">{rec.items}</td> 
                           {user.role !== 'GM' && <td className="p-3 text-right">{formatRp(rec.gajiPokok)}</td>}
                           <td className="p-3 font-bold text-[#2D5A2D] text-right">+{formatRp(rec.bonus)}</td>
-                          {user.role !== 'GM' && <td className="p-3 font-bold text-[#8A2E2E] text-right">-{formatRp(rec.denda)}{rec.denda > 0 && <button onClick={() => handleResetDenda(rec.id)} className="block ml-auto mt-1 text-[8px] bg-[#EBE5D9] px-2 py-0.5 rounded uppercase">Reset</button>}</td>}
+                          {user.role !== 'GM' && <td className="p-3 font-bold text-[#8A2E2E] text-right">-{formatRp(rec.denda)}</td>}
                           <td className="p-3 font-black text-right">{formatRp(rec.totalBersih)}</td>
                         </tr>
                       ))}
@@ -319,20 +323,46 @@ export default function AdminDashboard() {
           <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
             <div className="lg:col-span-2 space-y-8">
               
+              {/* CARD: TOTAL UANG FISIK (DIUBAH SESUAI PERMINTAAN OWNER) */}
+              <div className="bg-[#2D5A2D] rounded-[24px] p-6 text-white relative overflow-hidden shadow-md border border-[#1F401F]">
+                <div className="relative z-10">
+                  <p className="text-xs font-black text-[#A3C8A3] uppercase mb-1">Total Uang di Tangan (Dompet Owner)</p>
+                  <h2 className="text-4xl md:text-5xl font-black mb-4">{formatRp(financeData.uangDompet)}</h2>
+                  
+                  <div className="bg-[#1F401F] rounded-xl p-4 mt-4 border border-[#3A703A]">
+                    <p className="text-[10px] font-bold text-[#A3C8A3] uppercase mb-2">Rincian Uang di Dompet:</p>
+                    <div className="space-y-2 text-sm font-medium">
+                      <div className="flex justify-between border-b border-[#3A703A] pb-1">
+                        <span>Laba Bersih Chogo (50%)</span>
+                        <span className="font-bold">{formatRp(financeData.kasChogo)}</span>
+                      </div>
+                      <div className="flex justify-between border-b border-[#3A703A] pb-1">
+                        <span>Dividen Owner (50%)</span>
+                        <span className="font-bold">{formatRp(financeData.dividenOwner)}</span>
+                      </div>
+                      <div className="flex justify-between border-b border-[#3A703A] pb-1 text-[#F1C40F]">
+                        <span>Dana Ditahan (Gaji & Royalti)</span>
+                        <span className="font-bold">{formatRp(financeData.danaDitahan)}</span>
+                      </div>
+                      
+                      {/* BARIS TAMBAHAN UNTUK MODAL KASIR & GRAND TOTAL */}
+                      <div className="flex justify-between pt-2 mt-1 border-t border-[#3A703A] border-dashed text-[#3AE374]">
+                        <span>+ Modal Kasir (Aman di Laci)</span>
+                        <span className="font-bold">{formatRp(MODAL_KASIR_TETAP)}</span>
+                      </div>
+                      <div className="flex justify-between pt-2 mt-2 border-t-2 border-[#A3C8A3] text-lg text-white">
+                        <span>TOTAL KESELURUHAN (Dompet + Laci)</span>
+                        <span className="font-black">{formatRp(financeData.uangGrandTotal)}</span>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+                <div className="absolute right-0 top-0 text-9xl opacity-5 translate-x-4 -translate-y-4">💰</div>
+              </div>
+
               <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-                <div className="bg-white p-6 rounded-[24px] border border-[#EBE5D9] col-span-2"><p className="text-[10px] font-black text-[#8C7A6B] uppercase mb-2">Total Pendapatan</p><h3 className="text-3xl font-black text-[#2D5A2D]">{formatRp(financeData.totalRevenue)}</h3></div>
-                <div className="bg-white p-6 rounded-[24px] border border-[#EBE5D9] col-span-2"><p className="text-[10px] font-black text-[#8C7A6B] uppercase mb-2">Beban Operasional & Gaji</p><h3 className="text-3xl font-black text-[#8A2E2E]">{formatRp(financeData.totalExpenses + financeData.totalPayrollBeban)}</h3></div>
-                
-                <div className="bg-[#3A2A1A] p-6 rounded-[24px] col-span-2 text-white relative overflow-hidden">
-                  <p className="text-xs font-black text-[#C69C6D] uppercase mb-1">Kas Chogo (50%)</p>
-                  <h3 className="text-4xl font-black">{formatRp(financeData.kasChogo)}</h3>
-                  <div className="absolute right-0 bottom-0 text-6xl opacity-10 translate-y-4">☕</div>
-                </div>
-                <div className="bg-[#C69C6D] p-6 rounded-[24px] col-span-2 text-white relative overflow-hidden">
-                  <p className="text-xs font-black text-[#3A2A1A] uppercase mb-1">Dividen Owner (50%)</p>
-                  <h3 className="text-4xl font-black text-[#3A2A1A]">{formatRp(financeData.dividenOwner)}</h3>
-                  <div className="absolute right-0 bottom-0 text-6xl opacity-10 translate-y-4">📈</div>
-                </div>
+                <div className="bg-white p-6 rounded-[24px] border border-[#EBE5D9] col-span-2"><p className="text-[10px] font-black text-[#8C7A6B] uppercase mb-2">Total Pendapatan Kotor</p><h3 className="text-3xl font-black text-[#3A2A1A]">{formatRp(financeData.totalRevenue)}</h3></div>
+                <div className="bg-white p-6 rounded-[24px] border border-[#EBE5D9] col-span-2"><p className="text-[10px] font-black text-[#8C7A6B] uppercase mb-2">Total Pengeluaran Nota</p><h3 className="text-3xl font-black text-[#8A2E2E]">{formatRp(financeData.totalExpenses)}</h3></div>
               </div>
 
               {/* RINCIAN PENGELUARAN */}
@@ -345,7 +375,6 @@ export default function AdminDashboard() {
                         <th className="pb-3">Tanggal</th>
                         <th className="pb-3">Kategori</th>
                         <th className="pb-3">Deskripsi</th>
-                        <th className="pb-3 text-center">Qty</th>
                         <th className="pb-3 text-right">Total Nominal</th>
                         <th className="pb-3 text-center">Aksi</th>
                       </tr>
@@ -356,7 +385,6 @@ export default function AdminDashboard() {
                           <td className="py-3 font-bold">{formatDate(exp.created_at)}</td>
                           <td className="py-3 text-[10px] font-black uppercase text-[#C69C6D]">{exp.category}</td>
                           <td className="py-3">{exp.description}</td>
-                          <td className="py-3 text-center font-bold">{exp.qty || 1}</td>
                           <td className={`py-3 text-right font-black ${exp.category === 'Uang Kembalian (Non-Expense)' ? 'text-[#2D5A2D]' : 'text-[#8A2E2E]'}`}>{formatRp(exp.amount)}</td>
                           <td className="py-3 text-center"><button onClick={() => handleDeleteExpense(exp.id)} className="text-red-400 hover:text-red-600 font-black uppercase text-[10px]">Hapus</button></td>
                         </tr>
@@ -376,6 +404,7 @@ export default function AdminDashboard() {
                   <select value={expCategory} onChange={(e) => setExpCategory(e.target.value)} className="w-full mt-1 border border-[#EBE5D9] p-3 rounded-xl text-xs font-bold bg-[#FAF8F5] outline-none">
                     <option value="Bahan Baku">Bahan Baku</option>
                     <option value="Operasional">Operasional</option>
+                    <option value="Pembayaran Gaji & Royalti">Pembayaran Gaji & Royalti</option>
                     <option value="Uang Kembalian (Non-Expense)">Uang Kembalian (Modal Kasir)</option>
                   </select>
                 </div>
@@ -383,15 +412,9 @@ export default function AdminDashboard() {
                   <label className="text-[10px] font-black text-[#8C7A6B] uppercase">Deskripsi</label>
                   <input type="text" placeholder="Cth: Belanja Susu" value={expDesc} onChange={(e) => setExpDesc(e.target.value)} className="w-full mt-1 border border-[#EBE5D9] p-3 rounded-xl text-xs font-bold bg-[#FAF8F5] outline-none" />
                 </div>
-                <div className="grid grid-cols-2 gap-4">
-                  <div>
-                    <label className="text-[10px] font-black text-[#8C7A6B] uppercase">Qty</label>
-                    <input type="number" placeholder="1" value={expQty} onChange={(e) => setExpQty(e.target.value)} className="w-full mt-1 border border-[#EBE5D9] p-3 rounded-xl text-xs font-bold bg-[#FAF8F5] outline-none" />
-                  </div>
-                  <div>
-                    <label className="text-[10px] font-black text-[#8C7A6B] uppercase">Total (Rp)</label>
-                    <input type="number" placeholder="0" value={expAmount} onChange={(e) => setExpAmount(e.target.value)} className="w-full mt-1 border border-[#EBE5D9] p-3 rounded-xl text-xs font-bold bg-[#FAF8F5] outline-none" />
-                  </div>
+                <div>
+                  <label className="text-[10px] font-black text-[#8C7A6B] uppercase">Total (Rp)</label>
+                  <input type="number" placeholder="0" value={expAmount} onChange={(e) => setExpAmount(e.target.value)} className="w-full mt-1 border border-[#EBE5D9] p-3 rounded-xl text-xs font-bold bg-[#FAF8F5] outline-none" />
                 </div>
                 <button type="submit" disabled={loading} className="w-full bg-[#C69C6D] text-white py-4 rounded-xl font-black uppercase text-[10px] hover:bg-[#B58B5C]">Simpan Nota</button>
               </form>
