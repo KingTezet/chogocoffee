@@ -11,21 +11,23 @@ const CHOGO_LAT = -6.858907;
 const CHOGO_LON = 107.920612;
 const MAX_RADIUS = 500; 
 
-// --- IDENTITAS (DAFTAR SUDAH DITAMBAH IBOO) ---
+// --- IDENTITAS (Adin sudah dihapus sepenuhnya) ---
 const SUPER_ADMIN_ID = '1a24f87a-8ee9-4e19-857a-06ec616d1378';
-const OWNER_ID = 'f2b6a943-4f9e-4b2a-8d1c-99e52e25d2b7'; // ID Khusus Iboo
+const OWNER_ID = 'f2b6a943-4f9e-4b2a-8d1c-99e52e25d2b7'; 
+const RISCA_ID = '9e8d7c6b-5a4b-3c2d-1e0f-a1b2c3d4e5f6'; 
+
 const STAFF_LIST = [
   { id: 'c720fb23-e13f-4f5d-a2de-40989ae1df69', name: 'Vikry' },
-  { id: 'a6b27457-78f6-474e-8f9b-36a45028a8be', name: 'Arief' },
-  { id: 'b1935c42-8a9b-4e31-a7d2-6f2c3a5b8d91', name: 'Adin' }, // <-- Adin ditambahkan
+  { id: 'a6b27457-78f6-474e-8f9b-36a45028a8be', name: 'Arief' }, 
+  { id: RISCA_ID, name: 'Risca (Training)' },
   { id: OWNER_ID, name: 'Iboo (Owner)' },
   { id: SUPER_ADMIN_ID, name: 'Moch Sugih Nugraha (GM)' }
 ];
 
-// --- JADWAL SHIFT (SUDAH DIUPDATE) ---
+// --- JADWAL SHIFT ---
 const SHIFTS = [
   { id: 'PAGI', label: 'Shift Pagi (07:00 - 15:00)', start: '07:00' },
-  { id: 'MIDDLE', label: 'Shift Middle (11:00 - 20:00)', start: '11:00' }, // <-- Label diubah ke jam 20:00
+  { id: 'MIDDLE', label: 'Shift Middle (11:00 - 20:00)', start: '11:00' }, 
   { id: 'SIANG', label: 'Shift Siang (15:00 - 23:00)', start: '15:00' },
 ];
 
@@ -39,11 +41,15 @@ export default function AbsensiPortal() {
   const [file, setFile] = useState<File | null>(null);
   const [loading, setLoading] = useState(false);
   const [message, setMessage] = useState('');
-  const [msgType, setMsgType] = useState<'info' | 'success' | 'error'>('info');
+  const [msgType, setMsgType] = useState<'info' | 'error'>('info');
+
+  const [showSuccessModal, setShowSuccessModal] = useState(false);
+  const [successMessage, setSuccessMessage] = useState('');
 
   const isGM = selectedStaff === SUPER_ADMIN_ID;
   const isOwner = selectedStaff === OWNER_ID;
-  const isPrivileged = isGM || isOwner; // GM & Owner bebas lokasi
+  const isRisca = selectedStaff === RISCA_ID; 
+  const isPrivileged = isGM || isOwner; 
 
   useEffect(() => {
     if (isGM) setMode('IN');
@@ -82,7 +88,6 @@ export default function AbsensiPortal() {
     navigator.geolocation.getCurrentPosition(async (position) => {
       const { latitude, longitude } = position.coords;
 
-      // Geofencing: Hanya untuk Staff biasa
       if (!isPrivileged) {
         const R = 6371e3;
         const dLat = (CHOGO_LAT - latitude) * (Math.PI / 180);
@@ -107,8 +112,7 @@ export default function AbsensiPortal() {
         const { data: imgUrl } = supabase.storage.from('selfie-photos').getPublicUrl(uploadData.path);
 
         if (isGM || mode === 'IN') {
-          // Owner & GM tidak kena denda
-          const lateMin = (isGM || isOwner) ? 0 : calculateLateDenda(SHIFTS.find(s => s.id === selectedShift)!.start);
+          const lateMin = (isGM || isOwner || isRisca) ? 0 : calculateLateDenda(SHIFTS.find(s => s.id === selectedShift)!.start);
           
           const { error: dbErr } = await supabase.from('attendance_logs').insert({
             user_id: selectedStaff,
@@ -122,8 +126,14 @@ export default function AbsensiPortal() {
             notes: isGM ? progress : null, 
           });
           if (dbErr) throw dbErr;
-          setMsgType('success');
-          setMessage(isPrivileged ? '✅ Absen tervalidasi (Akses Khusus).' : (lateMin > 0 ? `⚠️ Terlambat ${lateMin}m.` : '✅ Masuk tepat waktu.'));
+          
+          let finalMsg = '';
+          if (isPrivileged) finalMsg = 'Absen tervalidasi (Akses Khusus).';
+          else if (isRisca) finalMsg = 'Masuk training divalidasi. Semangat!';
+          else finalMsg = lateMin > 0 ? `Terlambat ${lateMin} menit.` : 'Masuk tepat waktu.';
+          
+          setSuccessMessage(finalMsg);
+          setShowSuccessModal(true);
         } 
         else {
           const { data: lastLog } = await supabase.from('attendance_logs')
@@ -138,10 +148,12 @@ export default function AbsensiPortal() {
             revenue_generated: parseFloat(revenue),
           }).eq('id', lastLog.id);
           if (dbErr) throw dbErr;
-          setMsgType('success');
-          setMessage('✅ Laporan pulang terkirim.');
+          
+          setSuccessMessage('Laporan pulang dan penjualan berhasil dikirim.');
+          setShowSuccessModal(true);
         }
 
+        setMessage('');
         setFile(null); setItemsSold(''); setRevenue(''); setProgress('');
       } catch (e: any) {
         setMsgType('error'); setMessage(`Error: ${e.message}`);
@@ -149,12 +161,39 @@ export default function AbsensiPortal() {
         setLoading(false);
       }
     }, () => {
-      setMsgType('error'); setMessage('Aktifkan GPS.'); setLoading(false);
+      setMsgType('error'); setMessage('Aktifkan GPS perangkat Anda.'); setLoading(false);
     }, { enableHighAccuracy: true });
   };
 
+  const handleCloseModal = () => {
+    setShowSuccessModal(false);
+    window.location.reload(); 
+  };
+
   return (
-    <div className="min-h-screen bg-[#F9F6F0] flex items-center justify-center p-4">
+    <div className="min-h-screen bg-[#F9F6F0] flex items-center justify-center p-4 relative">
+      
+      {/* POP UP MODAL SUKSES */}
+      {showSuccessModal && (
+        <div className="fixed inset-0 bg-black/60 flex items-center justify-center z-50 p-4">
+          <div className="bg-white p-8 rounded-[32px] w-full max-w-sm shadow-xl text-center animate-fade-in-down border border-[#EBE5D9]">
+            <div className="w-20 h-20 bg-[#F2F7F2] text-[#2D5A2D] rounded-full flex items-center justify-center mx-auto mb-5 text-4xl">
+              ✅
+            </div>
+            <h3 className="font-black text-2xl mb-2 text-[#3A2A1A] tracking-tight">Berhasil!</h3>
+            <p className="text-sm text-[#8C7A6B] font-medium mb-8 leading-relaxed">
+              {successMessage}
+            </p>
+            <button 
+              onClick={handleCloseModal} 
+              className="w-full bg-[#3A2A1A] text-white py-4 rounded-2xl font-black text-xs uppercase tracking-widest hover:bg-[#C69C6D] transition-colors shadow-md"
+            >
+              Tutup & Selesai
+            </button>
+          </div>
+        </div>
+      )}
+
       <div className="bg-white p-8 md:p-10 rounded-[32px] shadow-sm border border-[#EBE5D9] w-full max-w-[440px]">
         <div className="text-center mb-8">
           <p className="text-[#A68A6B] font-bold text-[10px] uppercase tracking-[0.3em] mb-2">Internal Portal</p>
@@ -223,7 +262,7 @@ export default function AbsensiPortal() {
           </div>
 
           <div className="min-h-[48px] flex items-end">
-            {message && <div className={`w-full p-4 rounded-2xl text-[11px] font-bold text-center border transition-all ${msgType === 'success' ? 'bg-[#F2F7F2] text-[#2D5A2D]' : 'bg-[#FDF2F2] text-[#8A2E2E]'}`}>{message}</div>}
+            {message && <div className={`w-full p-4 rounded-2xl text-[11px] font-bold text-center border transition-all ${msgType === 'info' ? 'bg-[#F5F2EE] text-[#8C7A6B]' : 'bg-[#FDF2F2] text-[#8A2E2E]'}`}>{message}</div>}
           </div>
 
           <button onClick={handleAction} disabled={loading} className={`w-full text-white font-black py-5 rounded-2xl shadow-sm text-xs tracking-widest ${loading ? 'bg-[#D2C5B8]' : 'bg-[#3A2A1A] hover:bg-[#C69C6D]'}`}>
