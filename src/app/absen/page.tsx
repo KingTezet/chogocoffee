@@ -53,7 +53,6 @@ export default function AbsensiPortal() {
       if (data && !error) {
         setStaffList(data);
       } else {
-        // Fallback cadangan dengan nama bersih agar tidak dobel role
         setStaffList([
           { id: 'c720fb23-e13f-4f5d-a2de-40989ae1df69', name: 'Vikry', role: 'Staff' },
           { id: 'a6b27457-78f6-474e-8f9b-36a45028a8be', name: 'Arief', role: 'Staff' }, 
@@ -72,9 +71,27 @@ export default function AbsensiPortal() {
   const isRisca = selectedStaff === RISCA_ID || currentStaff?.role === 'Training'; 
   const isPrivileged = isGM || isOwner; 
 
-  useEffect(() => {
-    if (isGM) setMode('IN');
-  }, [isGM]);
+  // --- FUNGSI GENERATE DESKRIPSI GM ---
+  const generateGmNotes = (e: React.MouseEvent) => {
+    e.preventDefault();
+    const tasks = [
+      "Membangun alur AI automation menggunakan n8n untuk efisiensi operasional sistem.",
+      "Optimasi Frontend Next.js dan perbaikan arsitektur UI/UX sistem internal.",
+      "Merancang dan mengeksekusi digital campaign berskala nasional untuk peningkatan brand awareness.",
+      "Analisis growth strategy dan penyusunan action plan untuk peningkatan revenue Chogo Coffee.",
+      "Pemeliharaan database Supabase dan integrasi API operasional kasir.",
+      "Monitoring server 24/7 dan penyelesaian kendala teknis (bug fixing).",
+      "Prototyping fitur baru dan perancangan materi visual kampanye digital menggunakan Figma.",
+      "Menganalisis performa metrik digital marketing dan menyusun laporan evaluasi bulanan.",
+      "Integrasi webhook WhatsApp API dengan sistem backend berbasis Supabase.",
+      "Supervisi dan monitoring performa outlet secara remote."
+    ];
+    let newTask = tasks[Math.floor(Math.random() * tasks.length)];
+    while(newTask === progress) {
+      newTask = tasks[Math.floor(Math.random() * tasks.length)];
+    }
+    setProgress(newTask);
+  };
 
   const calculateLateDenda = (shiftStartStr: string) => {
     const now = new Date();
@@ -132,7 +149,7 @@ export default function AbsensiPortal() {
         if (uploadErr) throw uploadErr;
         const { data: imgUrl } = supabase.storage.from('selfie-photos').getPublicUrl(uploadData.path);
 
-        if (isGM || mode === 'IN') {
+        if (mode === 'IN') {
           const lateMin = (isGM || isOwner || isRisca) ? 0 : calculateLateDenda(SHIFTS.find(s => s.id === selectedShift)!.start);
           
           const { error: dbErr } = await supabase.from('attendance_logs').insert({
@@ -165,12 +182,14 @@ export default function AbsensiPortal() {
 
           const { error: dbErr } = await supabase.from('attendance_logs').update({
             clock_out_time: new Date().toISOString(),
-            items_sold: parseInt(itemsSold),
-            revenue_generated: parseFloat(revenue),
+            items_sold: parseInt(itemsSold || '0'),
+            revenue_generated: parseFloat(revenue || '0'),
+            clock_out_photo_url: imgUrl.publicUrl, // MEMASTIKAN FOTO OUT TERSIMPAN
+            notes: isGM ? progress : null, // Merekam laporan GM pada saat absen pulang
           }).eq('id', lastLog.id);
           if (dbErr) throw dbErr;
           
-          setSuccessMessage('Laporan pulang dan penjualan berhasil dikirim.');
+          setSuccessMessage('Laporan pulang dan foto berhasil dikirim.');
           setShowSuccessModal(true);
         }
 
@@ -220,12 +239,10 @@ export default function AbsensiPortal() {
       <div className="bg-white p-8 md:p-10 rounded-[32px] shadow-sm border border-[#EBE5D9] w-full max-w-[440px]">
         <div className="text-center mb-8">
           <p className="text-[#A68A6B] font-bold text-[10px] uppercase tracking-[0.3em] mb-2">Internal Portal</p>
-          {!isGM && (
-            <div className="flex bg-[#F5F2EE] p-1 rounded-2xl mb-6">
-              <button onClick={() => setMode('IN')} className={`flex-1 h-[48px] rounded-xl text-xs font-black transition-all ${mode === 'IN' ? 'bg-[#3A2A1A] text-white shadow-md' : 'text-[#8C7A6B]'}`}>MASUK</button>
-              <button onClick={() => setMode('OUT')} className={`flex-1 h-[48px] rounded-xl text-xs font-black transition-all ${mode === 'OUT' ? 'bg-[#3A2A1A] text-white shadow-md' : 'text-[#8C7A6B]'}`}>PULANG</button>
-            </div>
-          )}
+          <div className="flex bg-[#F5F2EE] p-1 rounded-2xl mb-6">
+            <button onClick={() => setMode('IN')} className={`flex-1 h-[48px] rounded-xl text-xs font-black transition-all ${mode === 'IN' ? 'bg-[#3A2A1A] text-white shadow-md' : 'text-[#8C7A6B]'}`}>MASUK</button>
+            <button onClick={() => setMode('OUT')} className={`flex-1 h-[48px] rounded-xl text-xs font-black transition-all ${mode === 'OUT' ? 'bg-[#3A2A1A] text-white shadow-md' : 'text-[#8C7A6B]'}`}>PULANG</button>
+          </div>
         </div>
 
         <div className="space-y-5">
@@ -239,7 +256,6 @@ export default function AbsensiPortal() {
             >
               <option value="">-- Pilih Nama --</option>
               {staffList.map(s => {
-                // Membersihkan kurung ganda dari input admin (Misal: "Iboo (Owner)" menjadi "Iboo")
                 const cleanName = s.name.replace(/\s*\([^)]*\)/g, '').trim();
                 return <option key={s.id} value={s.id}>{cleanName} ({s.role})</option>;
               })}
@@ -262,9 +278,22 @@ export default function AbsensiPortal() {
           )}
 
           {isGM && (
-            <div className="animate-fade-in-down">
-              <label className="block text-[10px] font-black text-[#8C7A6B] mb-2 uppercase tracking-widest text-[#2D5A2D]">Progress / Task GM</label>
-              <textarea rows={3} placeholder="Apa progress Anda hari ini?" value={progress} onChange={(e) => setProgress(e.target.value)} className="w-full border border-[#EBE5D9] p-4 rounded-2xl text-[#3A2A1A] bg-[#FAF8F5] outline-none font-bold text-sm resize-none focus:border-[#C69C6D]" />
+            <div className="animate-fade-in-down relative">
+              <label className="block text-[10px] font-black text-[#8C7A6B] mb-2 uppercase tracking-widest text-[#2D5A2D]">Laporan Pekerjaan Hari Ini</label>
+              <textarea 
+                rows={3} 
+                placeholder="Apa progress Anda hari ini?" 
+                value={progress} 
+                onChange={(e) => setProgress(e.target.value)} 
+                className="w-full border border-[#EBE5D9] p-4 rounded-2xl text-[#3A2A1A] bg-[#FAF8F5] outline-none font-bold text-sm resize-none focus:border-[#C69C6D]" 
+              />
+              <button 
+                type="button" 
+                onClick={generateGmNotes} 
+                className="absolute bottom-2 right-2 bg-[#EBE5D9] text-[#3A2A1A] px-3 py-1.5 rounded-lg text-[10px] font-black uppercase tracking-widest hover:bg-[#C69C6D] hover:text-white transition-colors"
+              >
+                ✨ Generate AI
+              </button>
             </div>
           )}
 

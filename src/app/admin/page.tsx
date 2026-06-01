@@ -25,10 +25,14 @@ const getLocalDateString = (dateStr: string) => {
   return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
 };
 
+// --- FIX BUG TANGGAL 31 NGUMPET KE JULI ---
 const getFinancialMonth = (dateStr: string) => {
   const d = new Date(dateStr);
-  if (d.getDate() >= 28) { d.setMonth(d.getMonth() + 1); }
-  return d.getMonth();
+  let m = d.getMonth();
+  if (d.getDate() >= 28) { 
+    m = m === 11 ? 0 : m + 1; // Jika Desember (11), kembali ke Januari (0)
+  }
+  return m;
 };
 
 const selectBgIcon = `url("data:image/svg+xml;charset=UTF-8,%3csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%238C7A6B' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3e%3cpolyline points='6 9 12 15 18 9'%3e%3c/polyline%3e%3c/svg%3e")`;
@@ -441,7 +445,7 @@ export default function AdminDashboard() {
           ))}
         </div>
 
-        {/* TAB LOGS (ABSENSI) */}
+        {/* TAB LOGS (ABSENSI) DENGAN PERBAIKAN DUA FOTO SELFIE */}
         {activeTab === 'LOGS' && (
           <div className="bg-white rounded-[32px] border border-[#EBE5D9] overflow-hidden shadow-sm p-2">
             <div className="overflow-x-auto">
@@ -451,43 +455,58 @@ export default function AdminDashboard() {
                     <th className="p-4 text-[10px] font-black text-[#8C7A6B] uppercase tracking-widest">Tanggal (Shift)</th>
                     <th className="p-4 text-[10px] font-black text-[#8C7A6B] uppercase tracking-widest">Nama</th>
                     <th className="p-4 text-[10px] font-black text-[#8C7A6B] uppercase tracking-widest">In / Out</th>
-                    <th className="p-4 text-[10px] font-black text-[#8C7A6B] uppercase tracking-widest">Bukti</th>
+                    <th className="p-4 text-[10px] font-black text-[#8C7A6B] uppercase tracking-widest">Bukti Foto</th>
+                    <th className="p-4 text-[10px] font-black text-[#8C7A6B] uppercase tracking-widest">Catatan / Laporan</th>
                     <th className="p-4 text-[10px] font-black text-[#8C7A6B] uppercase tracking-widest">Item / Revenue</th>
                     <th className="p-4 text-[10px] font-black text-[#8C7A6B] uppercase tracking-widest text-center">Action</th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-[#F0EBE1]">
-                  {currentMonthLogs.map((log) => (
-                    <tr key={log.id} className="hover:bg-[#FCF9F4] transition-colors">
-                      <td className="p-4 text-xs font-bold">{formatDate(log.created_at)}</td>
-                      <td className="p-4 font-black uppercase text-xs">{log.staff_name}</td>
-                      <td className="p-4 text-xs">
-                        <span className="text-[#2D5A2D] font-bold">{formatTime(log.created_at)}</span> - <span className="text-[#8A2E2E] font-bold">{formatTime(log.clock_out_time)}</span>
-                        {log.late_minutes > 0 && <span className="block text-[10px] text-red-500 font-bold mt-1">Telat {log.late_minutes}mnt</span>}
-                      </td>
-                      <td className="p-4">
-                        <div className="flex flex-col gap-2">
-                          {log.clock_in_photo_url ? (
-                            <a href={log.clock_in_photo_url} target="_blank" rel="noopener noreferrer">
-                              <img src={log.clock_in_photo_url} alt="Selfie" className="w-10 h-10 rounded-lg object-cover border border-[#EBE5D9] hover:scale-110 transition-transform" />
-                            </a>
-                          ) : <span className="text-[10px] text-gray-400 font-bold">No Photo</span>}
-                        </div>
-                      </td>
-                      <td className="p-4"><div><p className="text-xs font-bold">{log.items_sold || 0} Item</p><p className="text-[10px] font-black text-[#C69C6D]">{formatRp(log.revenue_generated || 0)}</p></div></td>
-                      <td className="p-4 text-center">
-                        <div className="flex justify-center gap-2">
-                          <button onClick={() => {
-                            setEditingLog(log);
-                            setEditItems(log.items_sold?.toString() || '0');
-                            setEditRevenue(log.revenue_generated?.toString() || '0');
-                            setEditLateMinutes(log.late_minutes?.toString() || '0');
-                          }} className="bg-[#EBE5D9] text-[#3A2A1A] px-3 py-1.5 rounded-lg text-[10px] font-bold uppercase hover:bg-[#C69C6D] hover:text-white transition-colors">Edit</button>
-                          <button onClick={() => handleDeleteLog(log.id, log.staff_name)} className="bg-[#FDF2F2] text-[#8A2E2E] px-3 py-1.5 rounded-lg text-[10px] font-bold uppercase">Hapus</button>
-                        </div>
-                      </td>
-                    </tr>
-                  ))}
+                  {currentMonthLogs.map((log) => {
+                    // Fallback pencarian nama kolom foto out jika penamaan di Supabase berbeda
+                    const outPhotoUrl = log.clock_out_photo_url || log.out_photo_url || log.photo_out || log.clock_out_photo || null;
+                    
+                    return (
+                      <tr key={log.id} className="hover:bg-[#FCF9F4] transition-colors text-xs">
+                        <td className="p-4 font-bold">{formatDate(log.created_at)}</td>
+                        <td className="p-4 font-black uppercase">{log.staff_name}</td>
+                        <td className="p-4">
+                          <span className="text-[#2D5A2D] font-bold">{formatTime(log.created_at)}</span> - <span className="text-[#8A2E2E] font-bold">{formatTime(log.clock_out_time)}</span>
+                          {log.late_minutes > 0 && <span className="block text-[10px] text-red-500 font-bold mt-1">Telat {log.late_minutes}mnt</span>}
+                        </td>
+                        <td className="p-4">
+                          <div className="flex gap-2">
+                            {log.clock_in_photo_url ? (
+                              <a href={log.clock_in_photo_url} target="_blank" rel="noopener noreferrer">
+                                <img src={log.clock_in_photo_url} alt="In" className="w-10 h-10 rounded-lg object-cover border border-[#EBE5D9] hover:scale-110 transition-transform shadow-sm" />
+                              </a>
+                            ) : <div className="w-10 h-10 rounded-lg bg-gray-50 border border-dashed border-gray-300 flex items-center justify-center text-[8px] font-bold text-gray-400 text-center uppercase tracking-widest">No<br/>In</div>}
+                            
+                            {outPhotoUrl ? (
+                              <a href={outPhotoUrl} target="_blank" rel="noopener noreferrer">
+                                <img src={outPhotoUrl} alt="Out" className="w-10 h-10 rounded-lg object-cover border border-[#EBE5D9] hover:scale-110 transition-transform shadow-sm" />
+                              </a>
+                            ) : <div className="w-10 h-10 rounded-lg bg-gray-50 border border-dashed border-gray-300 flex items-center justify-center text-[8px] font-bold text-gray-400 text-center uppercase tracking-widest">No<br/>Out</div>}
+                          </div>
+                        </td>
+                        <td className="p-4 text-xs font-bold text-[#8C7A6B] max-w-[200px] break-words leading-relaxed">
+                          {log.notes || '-'}
+                        </td>
+                        <td className="p-4"><div><p className="font-bold">{log.items_sold || 0} Item</p><p className="font-black text-[#C69C6D]">{formatRp(log.revenue_generated || 0)}</p></div></td>
+                        <td className="p-4 text-center">
+                          <div className="flex justify-center gap-2">
+                            <button onClick={() => {
+                              setEditingLog(log);
+                              setEditItems(log.items_sold?.toString() || '0');
+                              setEditRevenue(log.revenue_generated?.toString() || '0');
+                              setEditLateMinutes(log.late_minutes?.toString() || '0');
+                            }} className="bg-[#EBE5D9] text-[#3A2A1A] px-3 py-1.5 rounded-lg text-[10px] font-bold uppercase hover:bg-[#C69C6D] hover:text-white transition-colors">Edit</button>
+                            <button onClick={() => handleDeleteLog(log.id, log.staff_name)} className="bg-[#FDF2F2] text-[#8A2E2E] px-3 py-1.5 rounded-lg text-[10px] font-bold uppercase hover:bg-[#8A2E2E] hover:text-white transition-colors">Hapus</button>
+                          </div>
+                        </td>
+                      </tr>
+                    );
+                  })}
                 </tbody>
               </table>
             </div>
