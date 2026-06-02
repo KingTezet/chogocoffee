@@ -9,6 +9,7 @@ const supabase = createClient(supabaseUrl, supabaseKey);
 // --- KONFIGURASI KEUANGAN & ADMIN ---
 const ADMIN_SECRET_KEY = 'CHOGO2024';
 const SUPER_ADMIN_ID = '1a24f87a-8ee9-4e19-857a-06ec616d1378';
+const OWNER_ID = 'f2b6a943-4f9e-4b2a-8d1c-99e52e25d2b7';
 
 const GAJI_POKOK_STAFF = 35000;
 const BONUS_PER_ITEM = 500;
@@ -25,12 +26,11 @@ const getLocalDateString = (dateStr: string) => {
   return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
 };
 
-// --- FIX BUG TANGGAL 31 NGUMPET KE JULI ---
 const getFinancialMonth = (dateStr: string) => {
   const d = new Date(dateStr);
   let m = d.getMonth();
   if (d.getDate() >= 28) { 
-    m = m === 11 ? 0 : m + 1; // Jika Desember (11), kembali ke Januari (0)
+    m = m === 11 ? 0 : m + 1; 
   }
   return m;
 };
@@ -41,7 +41,7 @@ export default function AdminDashboard() {
   // --- STATES ---
   const [passcode, setPasscode] = useState('');
   const [isAuthorized, setIsAuthorized] = useState(false);
-  const [activeTab, setActiveTab] = useState<'LOGS' | 'PAYROLL' | 'FINANCE' | 'STAFF' | 'CUSTOMERS' | 'ACTIVITY'>('LOGS');
+  const [activeTab, setActiveTab] = useState<'DASHBOARD' | 'LOGS' | 'PAYROLL' | 'FINANCE' | 'STAFF' | 'CUSTOMERS' | 'ACTIVITY'>('DASHBOARD');
   
   const [logs, setLogs] = useState<any[]>([]);
   const [expenses, setExpenses] = useState<any[]>([]);
@@ -165,8 +165,8 @@ export default function AdminDashboard() {
     let cleanPhone = phone.replace(/[^0-9]/g, '');
     if (cleanPhone.startsWith('0')) { cleanPhone = '62' + cleanPhone.slice(1); }
     let text = stamps >= 10 
-      ? `Halo Kak ${name}, kami dari Chogo Coffee ingin menginfokan bahwa stamp Kakak sudah penuh (${stamps} stamp). Kakak sudah bisa menukarkannya dengan 1 kopi gratis di outlet Chogo Coffee. Sampai jumpa di outlet Kak!` 
-      : `Halo Kak ${name}, kami dari Chogo Coffee ingin menginfokan bahwa kartu loyalitas Kakak sudah mencapai ${stamps} stamp nih. Sedikit lagi penuh untuk klaim 1 kopi gratis. Ditunggu kedatangannya kembali di outlet ya Kak!`;
+      ? `Halo Kak ${name}, ada kabar baik dari Chogo Coffee. Kartu loyalitas digital Kakak saat ini sudah penuh dan mencapai 10 stamp.\n\nKakak sudah berhak menukarkannya dengan 1 item kopi gratis langsung di outlet Chogo Coffee. Saat berkunjung nanti, Kakak cukup tunjukkan nomor WhatsApp yang terdaftar ini kepada kasir kami yang bertugas.\n\nSelamat menikmati kopi gratisnya dan sampai jumpa di outlet Chogo Coffee, Kak.` 
+      : `Halo Kak ${name}, kami dari Chogo Coffee ingin menginfokan bahwa kartu loyalitas digital Kakak sudah mencapai ${stamps} stamp nih.\n\nSedikit lagi kartu stamp Kakak akan penuh untuk diklaim dengan 1 jatah kopi gratis di outlet kami.\n\nKami tunggu kedatangan Kakak kembali di outlet Chogo Coffee ya. Kakak juga bisa mengecek jumlah stamp kartu loyalitas Kakak kapan saja secara mandiri melalui tautan chogocoffee.com/loyalty. Terima kasih dan sampai jumpa, Kak.`;
     return `https://wa.me/${cleanPhone}?text=${encodeURIComponent(text)}`;
   };
 
@@ -235,17 +235,32 @@ export default function AdminDashboard() {
     setExpDesc(''); setExpAmount(''); setExpDate(getLocalDateString(new Date().toISOString())); fetchData();
   };
 
-  // --- LOGIKA PERHITUNGAN KEUANGAN ---
-  const { payrollData, financeData, currentMonthLogs, currentMonthExpenses, currentMonthActivity } = useMemo(() => {
+  // --- LOGIKA PERHITUNGAN KEUANGAN & DASHBOARD ---
+  const { 
+    payrollData, 
+    financeData, 
+    currentMonthLogs, 
+    currentMonthExpenses, 
+    currentMonthActivity,
+    dashboardStats
+  } = useMemo(() => {
     const filteredLogs = logs.filter(log => filterMonth === -1 || getFinancialMonth(log.created_at) === filterMonth);
     const filteredExpenses = expenses.filter(exp => filterMonth === -1 || getFinancialMonth(exp.created_at) === filterMonth);
     const filteredActivity = activityLogs.filter(act => filterMonth === -1 || getFinancialMonth(act.created_at) === filterMonth);
 
+    // KUMPULKAN TOTAL GLOBAL HARIAN (SINKRON UNTUK PAYROLL DAN LEADERBOARD)
     const dailyGlobalItems: Record<string, number> = {};
+    const dailyGlobalRevenue: Record<string, number> = {};
     filteredLogs.forEach(log => {
       const dateKey = getLocalDateString(log.created_at);
-      if (!dailyGlobalItems[dateKey]) dailyGlobalItems[dateKey] = 0;
-      if (log.user_id !== SUPER_ADMIN_ID) dailyGlobalItems[dateKey] += (log.items_sold || 0);
+      if (!dailyGlobalItems[dateKey]) {
+        dailyGlobalItems[dateKey] = 0;
+        dailyGlobalRevenue[dateKey] = 0;
+      }
+      if (log.user_id !== SUPER_ADMIN_ID) {
+        dailyGlobalItems[dateKey] += (Number(log.items_sold) || 0);
+        dailyGlobalRevenue[dateKey] += (Number(log.revenue_generated) || 0);
+      }
     });
 
     const payrollByUser: Record<string, { name: string, role: string, records: any[], totalGaji: number }> = {};
@@ -255,7 +270,7 @@ export default function AdminDashboard() {
     let monthlyPayrollBeban = 0;
     
     filteredLogs.forEach(log => {
-      monthlyTotalRevenue += (log.revenue_generated || 0);
+      monthlyTotalRevenue += (Number(log.revenue_generated) || 0);
       const dateKey = getLocalDateString(log.created_at); 
       const userPayroll = payrollByUser[log.user_id]; 
       if (!userPayroll) return;
@@ -271,7 +286,8 @@ export default function AdminDashboard() {
         userPayroll.records.push({ date: dateKey, items: globalItemsHariIni, gp, bonus, denda: 0, bersih: totalBersih });
       } else if (userPayroll.role === 'Training') {
         gp = GAJI_POKOK_STAFF; totalBersih = gp;
-        userPayroll.records.push({ date: dateKey, items: 0, gp, bonus: 0, denda: 0, bersih: totalBersih });
+        // PERBAIKAN: Menampilkan item global untuk role Training agar angkanya sama dengan staff lain di hari yang sama
+        userPayroll.records.push({ date: dateKey, items: globalItemsHariIni, gp, bonus: 0, denda: 0, bersih: totalBersih });
       } else {
         gp = GAJI_POKOK_STAFF; bonus = globalItemsHariIni * BONUS_PER_ITEM; denda = (log.late_minutes || 0) * DENDA_PER_MENIT;
         let kalkulasiKotor = gp + bonus - denda; totalBersih = Math.max(0, kalkulasiKotor); 
@@ -284,7 +300,7 @@ export default function AdminDashboard() {
     let monthlyTotalExpenses = 0; 
     filteredExpenses.forEach(exp => {
       if (exp.category !== 'Pembayaran Gaji & Royalti' && exp.category !== 'Penarikan Dividen Owner' && exp.category !== 'Uang Kembalian (Non-Expense)') {
-        monthlyTotalExpenses += (exp.amount || 0);
+        monthlyTotalExpenses += (Number(exp.amount) || 0);
       }
     });
 
@@ -292,18 +308,19 @@ export default function AdminDashboard() {
     const monthlyHakOwner = monthlyNetProfit * PERSENTASE_DIVIDEN_OWNER;
     const monthlyKasChogo = monthlyNetProfit - monthlyHakOwner;
 
+    // Untuk ALL TIME Profit 
     const allTimeDailyGlobalItems: Record<string, number> = {};
     logs.forEach(log => {
       const dateKey = getLocalDateString(log.created_at);
       if (!allTimeDailyGlobalItems[dateKey]) allTimeDailyGlobalItems[dateKey] = 0;
-      if (log.user_id !== SUPER_ADMIN_ID) allTimeDailyGlobalItems[dateKey] += (log.items_sold || 0);
+      if (log.user_id !== SUPER_ADMIN_ID) allTimeDailyGlobalItems[dateKey] += (Number(log.items_sold) || 0);
     });
 
     let allTimeTotalRevenue = 0;
     let allTimePayrollBeban = 0;
     
     logs.forEach(log => {
-      allTimeTotalRevenue += (log.revenue_generated || 0);
+      allTimeTotalRevenue += (Number(log.revenue_generated) || 0);
       const dateKey = getLocalDateString(log.created_at);
       const userRole = staffList.find(s => s.id === log.user_id)?.role;
       if (!userRole) return;
@@ -325,9 +342,9 @@ export default function AdminDashboard() {
     let allTimeDividenDitarik = 0; 
 
     expenses.forEach(exp => {
-      if (exp.category === 'Pembayaran Gaji & Royalti') allTimeTotalGajiDibayar += (exp.amount || 0);
-      else if (exp.category === 'Penarikan Dividen Owner') allTimeDividenDitarik += (exp.amount || 0);
-      else if (exp.category !== 'Uang Kembalian (Non-Expense)') allTimeTotalExpNota += (exp.amount || 0);
+      if (exp.category === 'Pembayaran Gaji & Royalti') allTimeTotalGajiDibayar += (Number(exp.amount) || 0);
+      else if (exp.category === 'Penarikan Dividen Owner') allTimeDividenDitarik += (Number(exp.amount) || 0);
+      else if (exp.category !== 'Uang Kembalian (Non-Expense)') allTimeTotalExpNota += (Number(exp.amount) || 0);
     });
     
     const allTimeNetProfit = allTimeTotalRevenue - allTimeTotalExpNota - allTimePayrollBeban;
@@ -338,26 +355,61 @@ export default function AdminDashboard() {
     const uangGrandTotal = uangDompet + MODAL_KASIR_TETAP; 
     let danaDitahan = Math.max(0, allTimePayrollBeban - allTimeTotalGajiDibayar); 
 
+    // --- KALKULASI KHUSUS DASHBOARD ---
+    const todayStr = getLocalDateString(new Date().toISOString());
+    const todayLogs = logs.filter(log => getLocalDateString(log.created_at) === todayStr);
+    
+    const todayRevenue = todayLogs.reduce((acc, log) => acc + (Number(log.revenue_generated) || 0), 0);
+    const todayItems = todayLogs.reduce((acc, log) => acc + (Number(log.items_sold) || 0), 0);
+    const todayStaffCount = todayLogs.length;
+
+    // SINKRONISASI LEADERBOARD KARYAWAN DENGAN LOGIKA GLOBAL HARIAN
+    const staffPerformanceMap: Record<string, { daysSet: Set<string> }> = {};
+    filteredLogs.forEach(log => {
+      if (log.user_id === SUPER_ADMIN_ID) return; 
+
+      const rawName = log.staff_name || 'Unknown';
+      const cleanName = rawName.replace(/\s*\([^)]*\)/g, '').trim();
+
+      if (!staffPerformanceMap[cleanName]) {
+        staffPerformanceMap[cleanName] = { daysSet: new Set() };
+      }
+      staffPerformanceMap[cleanName].daysSet.add(getLocalDateString(log.created_at));
+    });
+
+    const staffLeaderboard = Object.entries(staffPerformanceMap)
+      .map(([name, stats]) => {
+        let totalRev = 0;
+        let totalItm = 0;
+        stats.daysSet.forEach(dateKey => {
+          totalRev += dailyGlobalRevenue[dateKey] || 0;
+          totalItm += dailyGlobalItems[dateKey] || 0;
+        });
+        return { name, revenue: totalRev, items: totalItm, daysWorked: stats.daysSet.size };
+      })
+      .sort((a, b) => b.revenue - a.revenue)
+      .slice(0, 5); 
+
+    const totalActiveCustomers = customerList.length;
+    
+    const gmLatestLog = logs.find(log => log.user_id === SUPER_ADMIN_ID);
+
     return {
       payrollData: Object.values(payrollByUser).filter(u => u.records.length > 0),
       financeData: { 
-        monthlyTotalRevenue, 
-        monthlyTotalExpenses, 
-        monthlyPayrollBeban,
-        monthlyNetProfit,
-        monthlyHakOwner,
-        monthlyKasChogo,
-        sisaDividenOwner, 
-        kasChogo, 
-        uangDompet, 
-        uangGrandTotal, 
-        danaDitahan 
+        monthlyTotalRevenue, monthlyTotalExpenses, monthlyPayrollBeban,
+        monthlyNetProfit, monthlyHakOwner, monthlyKasChogo,
+        sisaDividenOwner, kasChogo, uangDompet, uangGrandTotal, danaDitahan 
       },
       currentMonthLogs: filteredLogs,
       currentMonthExpenses: filteredExpenses,
-      currentMonthActivity: filteredActivity
+      currentMonthActivity: filteredActivity,
+      dashboardStats: {
+        todayRevenue, todayItems, todayStaffCount,
+        staffLeaderboard, totalActiveCustomers, gmLatestLog
+      }
     };
-  }, [logs, expenses, activityLogs, staffList, filterMonth]);
+  }, [logs, expenses, activityLogs, staffList, filterMonth, customerList]);
 
   const formatRp = (num: number) => new Intl.NumberFormat('id-ID', { style: 'currency', currency: 'IDR', maximumFractionDigits: 0 }).format(num);
   const formatTime = (dateStr: string | null) => dateStr ? new Date(dateStr).toLocaleTimeString('id-ID', { hour: '2-digit', minute: '2-digit' }) : '-';
@@ -431,21 +483,295 @@ export default function AdminDashboard() {
               <option value={-1}>Semua Data</option>
               {MONTHS.map((m, i) => <option key={i} value={i}>Bulan: {m}</option>)}
             </select>
-            <button onClick={fetchData} className="h-[56px] bg-[#3A2A1A] text-white px-8 rounded-2xl text-xs font-black uppercase tracking-widest hover:bg-[#C69C6D] transition-all shadow-sm shrink-0">
-              {loading ? 'MEMUAT...' : 'SYNC DATA'}
+            <button onClick={fetchData} className="h-[56px] bg-[#3A2A1A] text-white px-8 rounded-2xl text-xs font-black uppercase tracking-widest hover:bg-[#C69C6D] transition-all shadow-sm shrink-0 flex items-center justify-center gap-2">
+              <svg xmlns="http://www.w3.org/2000/svg" className={`h-4 w-4 ${loading ? 'animate-spin' : ''}`} fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                <path strokeLinecap="round" strokeLinejoin="round" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
+              </svg>
+              {loading ? 'MEMUAT...' : 'SYNC'}
             </button>
           </div>
         </div>
 
-        <div className="flex gap-2 mb-8 overflow-x-auto pb-2">
-          {['LOGS', 'PAYROLL', 'FINANCE', 'STAFF', 'CUSTOMERS', 'ACTIVITY'].map(tab => (
+        <div className="flex gap-2 mb-8 overflow-x-auto pb-2 scrollbar-hide">
+          {['DASHBOARD', 'LOGS', 'PAYROLL', 'FINANCE', 'STAFF', 'CUSTOMERS', 'ACTIVITY'].map(tab => (
             <button key={tab} onClick={() => setActiveTab(tab as any)} className={`px-6 py-3 rounded-xl text-xs font-black uppercase tracking-widest transition-all whitespace-nowrap ${activeTab === tab ? 'bg-[#3A2A1A] text-white shadow-md' : 'bg-white text-[#8C7A6B] border border-[#EBE5D9] hover:border-[#C69C6D]'}`}>
-              {tab === 'LOGS' ? 'Data Absen' : tab === 'PAYROLL' ? 'Slip Gaji' : tab === 'FINANCE' ? 'Laba & Rugi' : tab === 'STAFF' ? 'Manajemen Staff' : tab === 'CUSTOMERS' ? 'Data Pelanggan' : 'Log Aktivitas'}
+              {tab === 'DASHBOARD' ? 'Overview' : tab === 'LOGS' ? 'Data Absen' : tab === 'PAYROLL' ? 'Slip Gaji' : tab === 'FINANCE' ? 'Laba & Rugi' : tab === 'STAFF' ? 'Manajemen Staff' : tab === 'CUSTOMERS' ? 'Data Pelanggan' : 'Log Aktivitas'}
             </button>
           ))}
         </div>
 
-        {/* TAB LOGS (ABSENSI) DENGAN PERBAIKAN DUA FOTO SELFIE */}
+        {/* =========================================
+            TAB DASHBOARD (EXECUTIVE OVERVIEW)
+        ========================================= */}
+        {activeTab === 'DASHBOARD' && (
+          <div className="space-y-8 animate-fade-in-down">
+            
+            {/* 1. EXECUTIVE WELCOME & VIP GM CARD */}
+            <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+              
+              {/* KIRI: WELCOME ADMIN & SYSTEM HEALTH */}
+              <div className="bg-white p-8 rounded-[32px] border border-[#EBE5D9] shadow-sm flex flex-col justify-between relative overflow-hidden">
+                <div className="relative z-10">
+                  <h2 className="text-3xl font-serif font-black mb-2 text-[#3A2A1A]">Halo, Admin Chōgō!</h2>
+                  <p className="text-sm font-medium text-[#8C7A6B] leading-relaxed mb-6">
+                    Akses kontrol penuh ke dalam sistem ERP. Pantau seluruh alur operasional, kelola manajemen staf, dan verifikasi lalu lintas keuangan dengan aman.
+                  </p>
+                </div>
+                
+                <div className="relative z-10 bg-[#FAF8F5] rounded-2xl p-4 border border-[#EBE5D9] flex items-center justify-between">
+                  <div className="flex items-center gap-3">
+                    <span className="flex h-3 w-3 relative">
+                      <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-green-400 opacity-75"></span>
+                      <span className="relative inline-flex rounded-full h-3 w-3 bg-green-500"></span>
+                    </span>
+                    <span className="text-xs font-black text-[#3A2A1A] uppercase tracking-widest">System Connected</span>
+                  </div>
+                  <div className="flex gap-2">
+                    <button onClick={() => setActiveTab('LOGS')} className="px-4 py-2 bg-[#3A2A1A] text-white rounded-lg text-[10px] font-black uppercase tracking-widest hover:bg-[#C69C6D] transition-colors">Absen</button>
+                    <button onClick={() => setActiveTab('FINANCE')} className="px-4 py-2 bg-[#EBE5D9] text-[#3A2A1A] rounded-lg text-[10px] font-black uppercase tracking-widest hover:bg-[#C69C6D] hover:text-white transition-colors">Finance</button>
+                  </div>
+                </div>
+              </div>
+
+              {/* KANAN: VIP GM STATUS CARD */}
+              <div className="bg-gradient-to-br from-[#2A1E12] to-[#110C07] p-8 rounded-[32px] border border-[#C69C6D]/40 shadow-xl text-white relative overflow-hidden flex flex-col justify-between">
+                <div className="absolute right-0 top-0 opacity-10 translate-x-4 -translate-y-4">
+                   <svg xmlns="http://www.w3.org/2000/svg" className="h-48 w-48 text-[#C69C6D]" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1}>
+                    <path strokeLinecap="round" strokeLinejoin="round" d="M9 12l2 2 4-4M7.835 4.697a3.42 3.42 0 001.946-.806 3.42 3.42 0 014.438 0 3.42 3.42 0 001.946.806 3.42 3.42 0 013.138 3.138 3.42 3.42 0 00.806 1.946 3.42 3.42 0 010 4.438 3.42 3.42 0 00-.806 1.946 3.42 3.42 0 01-3.138 3.138 3.42 3.42 0 00-1.946.806 3.42 3.42 0 01-4.438 0 3.42 3.42 0 00-1.946-.806 3.42 3.42 0 01-3.138-3.138 3.42 3.42 0 00-.806-1.946 3.42 3.42 0 010-4.438 3.42 3.42 0 00.806-1.946 3.42 3.42 0 013.138-3.138z" />
+                  </svg>
+                </div>
+                <div className="relative z-10 mb-4">
+                  <div className="flex items-center gap-3 mb-4">
+                    <span className="text-[#C69C6D] text-[10px] font-black uppercase tracking-[0.3em] flex items-center gap-2">
+                      <span className="w-2.5 h-2.5 rounded-full bg-green-500 animate-pulse shadow-[0_0_8px_rgba(34,197,94,0.8)]"></span>
+                      Live Monitoring
+                    </span>
+                    <span className="bg-[#C69C6D]/20 text-[#C69C6D] px-3 py-1 rounded-full text-[9px] font-black uppercase tracking-widest border border-[#C69C6D]/30">
+                      Executive
+                    </span>
+                  </div>
+                  <h2 className="text-2xl font-serif font-black text-[#EBE5D9] mb-1">General Manager</h2>
+                  <p className="text-[10px] text-[#8C7A6B] font-medium tracking-widest uppercase mb-2">Strategic Oversight & Planning</p>
+                </div>
+                <div className="relative z-10 w-full bg-black/40 p-4 rounded-2xl border border-[#C69C6D]/20 backdrop-blur-sm shadow-inner">
+                   <p className="text-[10px] text-[#8C7A6B] uppercase tracking-widest mb-1 flex items-center gap-2">
+                      <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2" /></svg>
+                      Current Focus / Task:
+                   </p>
+                   <p className="text-sm font-bold text-[#C69C6D] leading-relaxed line-clamp-2">
+                     {dashboardStats.gmLatestLog ? dashboardStats.gmLatestLog.notes : 'Standby / Reviewing business metrics...'}
+                   </p>
+                </div>
+              </div>
+            </div>
+
+            {/* 2. REAL-TIME TODAY'S STATS */}
+            <div>
+              <h3 className="font-black uppercase text-sm mb-4 tracking-widest text-[#3A2A1A] border-l-4 border-[#C69C6D] pl-3">
+                Live Operasional Hari Ini
+              </h3>
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+                <div className="bg-white p-6 rounded-[24px] border border-[#EBE5D9] shadow-sm">
+                  <div className="flex justify-between items-start mb-2">
+                    <p className="text-[10px] font-black text-[#8C7A6B] uppercase tracking-widest">Pendapatan Hari Ini</p>
+                    <div className="p-2 bg-[#F5F2EE] rounded-lg text-[#C69C6D]">
+                      <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8c-1.657 0-3 .895-3 2s1.343 2 3 2 3 .895 3 2-1.343 2-3 2m0-8c1.11 0 2.08.402 2.599 1M12 8V7m0 1v8m0 0v1m0-1c-1.11 0-2.08-.402-2.599-1M21 12a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>
+                    </div>
+                  </div>
+                  <h3 className="text-3xl font-black text-[#2D5A2D]">{formatRp(dashboardStats.todayRevenue)}</h3>
+                </div>
+                <div className="bg-white p-6 rounded-[24px] border border-[#EBE5D9] shadow-sm">
+                  <div className="flex justify-between items-start mb-2">
+                    <p className="text-[10px] font-black text-[#8C7A6B] uppercase tracking-widest">Item Terjual Hari Ini</p>
+                    <div className="p-2 bg-[#F5F2EE] rounded-lg text-[#C69C6D]">
+                      <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M16 11V7a4 4 0 00-8 0v4M5 9h14l1 12H4L5 9z" /></svg>
+                    </div>
+                  </div>
+                  <h3 className="text-3xl font-black text-[#3A2A1A]">{dashboardStats.todayItems} <span className="text-lg text-[#8C7A6B]">Cups</span></h3>
+                </div>
+                <div className="bg-white p-6 rounded-[24px] border border-[#EBE5D9] shadow-sm">
+                  <div className="flex justify-between items-start mb-2">
+                    <p className="text-[10px] font-black text-[#8C7A6B] uppercase tracking-widest">Karyawan Masuk Hari Ini</p>
+                    <div className="p-2 bg-[#F5F2EE] rounded-lg text-[#C69C6D]">
+                      <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0zm6 3a2 2 0 11-4 0 2 2 0 014 0zM7 10a2 2 0 11-4 0 2 2 0 014 0z" /></svg>
+                    </div>
+                  </div>
+                  <h3 className="text-3xl font-black text-[#3A2A1A]">{dashboardStats.todayStaffCount} <span className="text-lg text-[#8C7A6B]">Orang</span></h3>
+                </div>
+              </div>
+            </div>
+
+            {/* 3. FINANCIAL OVERVIEW & LEADERBOARD (PRIORITAS 3 - EVALUASI BULAN INI) */}
+            <div className="grid grid-cols-1 lg:grid-cols-2 gap-8 items-start">
+              
+              {/* KIRI: Financial Snapshot & Dompet Card */}
+              <div className="space-y-6">
+                {/* Financial Snapshot */}
+                <div className="bg-white rounded-[32px] border border-[#EBE5D9] p-8 shadow-sm">
+                  <h3 className="font-black uppercase text-sm mb-6 tracking-widest text-[#3A2A1A] flex items-center gap-2">
+                    <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5 text-[#C69C6D]" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z" /></svg>
+                    Performa Finansial {filterMonth === -1 ? 'All-Time' : MONTHS[filterMonth]}
+                  </h3>
+                  
+                  <div className="space-y-6">
+                    <div>
+                      <div className="flex justify-between text-xs font-bold mb-2">
+                        <span className="text-[#8C7A6B] uppercase tracking-widest">Pendapatan Kotor</span>
+                        <span className="text-[#3A2A1A]">{formatRp(financeData.monthlyTotalRevenue)}</span>
+                      </div>
+                      <div className="w-full bg-[#F5F2EE] rounded-full h-3">
+                        <div className="bg-[#C69C6D] h-3 rounded-full" style={{ width: '100%' }}></div>
+                      </div>
+                    </div>
+
+                    <div>
+                      <div className="flex justify-between text-xs font-bold mb-2">
+                        <span className="text-[#8C7A6B] uppercase tracking-widest">Total Pengeluaran (Nota + Gaji)</span>
+                        <span className="text-[#8A2E2E]">-{formatRp(financeData.monthlyTotalExpenses + financeData.monthlyPayrollBeban)}</span>
+                      </div>
+                      <div className="w-full bg-[#F5F2EE] rounded-full h-3">
+                        <div className="bg-[#8A2E2E] h-3 rounded-full" style={{ width: `${Math.min(((financeData.monthlyTotalExpenses + financeData.monthlyPayrollBeban) / (financeData.monthlyTotalRevenue || 1)) * 100, 100)}%` }}></div>
+                      </div>
+                    </div>
+
+                    <div className="pt-4 border-t border-[#F5F2EE]">
+                      <div className="flex justify-between items-end">
+                        <div>
+                          <p className="text-[10px] font-black text-[#8C7A6B] uppercase tracking-widest mb-1">Laba Bersih Estimasi</p>
+                          <h3 className="text-3xl font-black text-[#2D5A2D]">{formatRp(financeData.monthlyNetProfit)}</h3>
+                        </div>
+                        <div className="text-right">
+                          <p className="text-[10px] font-black text-[#8C7A6B] uppercase tracking-widest mb-1">Status</p>
+                          <span className={`px-3 py-1 rounded-full text-[10px] font-black uppercase tracking-widest ${financeData.monthlyNetProfit >= 0 ? 'bg-[#E8F5E9] text-[#2D5A2D]' : 'bg-[#FDF2F2] text-[#8A2E2E]'}`}>
+                            {financeData.monthlyNetProfit >= 0 ? 'PROFIT' : 'LOSS'}
+                          </span>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+
+                {/* Dompet Owner Mini Card (Pengisi Ruang Kosong) */}
+                <div className="bg-gradient-to-br from-[#2D5A2D] to-[#152e15] rounded-[32px] p-6 shadow-sm text-white relative overflow-hidden border border-[#3A703A]">
+                  <div className="absolute right-0 bottom-0 opacity-10 translate-x-4 translate-y-4">
+                    <svg xmlns="http://www.w3.org/2000/svg" className="h-32 w-32" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1} d="M12 8c-1.657 0-3 .895-3 2s1.343 2 3 2 3 .895 3 2-1.343 2-3 2m0-8c1.11 0 2.08.402 2.599 1M12 8V7m0 1v8m0 0v1m0-1c-1.11 0-2.08-.402-2.599-1M21 12a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>
+                  </div>
+                  <div className="relative z-10">
+                    <p className="text-[10px] font-black text-[#A3C8A3] uppercase tracking-widest mb-1">Total Uang di Dompet Owner</p>
+                    <h2 className="text-3xl font-black mb-4">{formatRp(financeData.uangDompet)}</h2>
+                    
+                    <div className="space-y-2 text-xs font-medium">
+                      <div className="flex justify-between border-b border-[#3A703A] pb-1.5">
+                        <span className="text-[#A3C8A3]">Kas Chogo (Sisa)</span>
+                        <span className="font-bold">{formatRp(financeData.kasChogo)}</span>
+                      </div>
+                      <div className="flex justify-between border-b border-[#3A703A] pb-1.5">
+                        <span className="text-[#A3C8A3]">Dividen Owner</span>
+                        <span className="font-bold">{formatRp(financeData.sisaDividenOwner)}</span>
+                      </div>
+                      <div className="flex justify-between border-b border-[#3A703A] pb-1.5 text-[#F1C40F]">
+                        <span>Dana Ditahan (Gaji)</span>
+                        <span className="font-bold">{formatRp(financeData.danaDitahan)}</span>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+              {/* KANAN: Top Performers */}
+              <div className="bg-white rounded-[32px] border border-[#EBE5D9] p-8 shadow-sm">
+                <div className="flex justify-between items-start mb-6">
+                  <h3 className="font-black uppercase text-sm tracking-widest text-[#3A2A1A] flex items-center gap-2">
+                    <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5 text-[#C69C6D]" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 3v4M3 5h4M6 17v4m-2-2h4m5-16l2.286 6.857L21 12l-5.714 2.143L13 21l-2.286-6.857L5 12l5.714-2.143L13 3z" /></svg>
+                    Top Performers (Kasir)
+                  </h3>
+                  <span className="text-[10px] font-black text-[#8C7A6B] uppercase bg-[#F5F2EE] px-2 py-1 rounded-lg text-right">
+                    Bulan<br/>{filterMonth === -1 ? 'Semua' : MONTHS[filterMonth]}
+                  </span>
+                </div>
+
+                {dashboardStats.staffLeaderboard.length === 0 ? (
+                  <div className="text-center py-10 bg-[#F5F2EE] rounded-2xl border border-[#EBE5D9] border-dashed">
+                    <p className="text-xs font-bold text-gray-400">Belum ada data penjualan karyawan.</p>
+                  </div>
+                ) : (
+                  <div className="grid grid-cols-1 gap-5 max-h-[400px] overflow-y-auto pt-4 pl-4 pr-2 pb-4 -ml-4 -mt-4 scrollbar-hide">
+                    {dashboardStats.staffLeaderboard.map((staff, idx) => {
+                      const isTop1 = idx === 0;
+                      const isTop2 = idx === 1;
+                      const isTop3 = idx === 2;
+                      const maxRevenue = dashboardStats.staffLeaderboard[0].revenue || 1;
+                      const percentage = Math.max((staff.revenue / maxRevenue) * 100, 5); 
+
+                      return (
+                        <div key={idx} className={`relative bg-white p-5 rounded-3xl border shadow-sm transition-all hover:-translate-y-1 hover:shadow-md ${isTop1 ? 'border-[#D9A05B] ring-2 ring-[#D9A05B]/20' : 'border-[#EBE5D9]'}`}>
+                          
+                          {/* RANK BADGE */}
+                          <div className={`absolute -top-3 -left-3 w-8 h-8 rounded-full flex items-center justify-center font-black text-white shadow-lg border-2 border-white text-xs
+                            ${isTop1 ? 'bg-yellow-400' : isTop2 ? 'bg-gray-400' : isTop3 ? 'bg-orange-400' : 'bg-[#3A2A1A]'}`}>
+                            #{idx + 1}
+                          </div>
+
+                          {isTop1 && (
+                            <div className="absolute top-4 right-4 bg-[#D9A05B]/10 text-[#D9A05B] px-3 py-1 rounded-full text-[9px] font-black uppercase tracking-widest">MVP</div>
+                          )}
+
+                          <div className="ml-4 mt-1">
+                            <h4 className="text-lg font-black text-[#3A2A1A] uppercase mb-0.5">{staff.name}</h4>
+                            <p className="text-2xl font-black text-[#2D5A2D] mb-3">{formatRp(staff.revenue)}</p>
+
+                            <div className="space-y-2">
+                              <div className="flex justify-between items-center text-[10px] font-bold border-b border-[#FDF6F0] pb-1.5">
+                                <span className="text-[#8C7A6B] uppercase tracking-widest">Total Item Terjual</span>
+                                <span className="text-[#3A2A1A] bg-[#F5F2EE] px-2 py-0.5 rounded">{staff.items} Cups</span>
+                              </div>
+                              <div className="flex justify-between items-center text-[10px] font-bold pb-1">
+                                <span className="text-[#8C7A6B] uppercase tracking-widest">Waktu Bekerja</span>
+                                <span className="text-[#3A2A1A] bg-[#F5F2EE] px-2 py-0.5 rounded">{staff.daysWorked} Hari Shift</span>
+                              </div>
+                              
+                              <div className="pt-1">
+                                <div className="w-full bg-[#F5F2EE] rounded-full h-1.5">
+                                  <div className={`h-1.5 rounded-full ${isTop1 ? 'bg-[#D9A05B]' : 'bg-[#3A2A1A]'}`} style={{ width: `${percentage}%` }}></div>
+                                </div>
+                              </div>
+                            </div>
+                          </div>
+                        </div>
+                      )
+                    })}
+                  </div>
+                )}
+              </div>
+
+            </div>
+
+            {/* 4. BOTTOM STATS ROW */}
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+              <div className="bg-gradient-to-r from-[#D9A05B] to-[#C69C6D] p-6 rounded-[24px] shadow-sm text-white flex justify-between items-center">
+                <div>
+                  <p className="text-[10px] font-black text-white/80 uppercase tracking-widest mb-1">Total Pelanggan Terdaftar</p>
+                  <h3 className="text-4xl font-black">{dashboardStats.totalActiveCustomers} <span className="text-lg font-bold">Member</span></h3>
+                </div>
+                <div className="bg-white/20 p-4 rounded-full">
+                  <svg xmlns="http://www.w3.org/2000/svg" className="h-8 w-8" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4.354a4 4 0 110 5.292M15 21H3v-1a6 6 0 0112 0v1zm0 0h6v-1a6 6 0 00-9-5.197M13 7a4 4 0 11-8 0 4 4 0 018 0z" /></svg>
+                </div>
+              </div>
+              <div className="bg-white border border-[#EBE5D9] p-6 rounded-[24px] shadow-sm flex justify-between items-center">
+                <div>
+                  <p className="text-[10px] font-black text-[#8C7A6B] uppercase tracking-widest mb-1">Total Karyawan Aktif</p>
+                  <h3 className="text-4xl font-black text-[#3A2A1A]">{staffList.filter(s => s.status === 'Active').length} <span className="text-lg font-bold text-[#8C7A6B]">Staff</span></h3>
+                </div>
+                <div className="bg-[#F5F2EE] text-[#8C7A6B] p-4 rounded-full">
+                  <svg xmlns="http://www.w3.org/2000/svg" className="h-8 w-8" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 13.255A23.931 23.931 0 0112 15c-3.183 0-6.22-.62-9-1.745M16 6V4a2 2 0 00-2-2h-4a2 2 0 00-2 2v2m4 6h.01M5 20h14a2 2 0 002-2V8a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z" /></svg>
+                </div>
+              </div>
+            </div>
+
+          </div>
+        )}
+
+        {/* TAB LOGS (ABSENSI) */}
         {activeTab === 'LOGS' && (
           <div className="bg-white rounded-[32px] border border-[#EBE5D9] overflow-hidden shadow-sm p-2">
             <div className="overflow-x-auto">
@@ -463,7 +789,6 @@ export default function AdminDashboard() {
                 </thead>
                 <tbody className="divide-y divide-[#F0EBE1]">
                   {currentMonthLogs.map((log) => {
-                    // Fallback pencarian nama kolom foto out jika penamaan di Supabase berbeda
                     const outPhotoUrl = log.clock_out_photo_url || log.out_photo_url || log.photo_out || log.clock_out_photo || null;
                     
                     return (
@@ -527,7 +852,7 @@ export default function AdminDashboard() {
                     <thead className="bg-[#FAF8F5]">
                       <tr className="text-[10px] font-black text-[#8C7A6B] uppercase">
                         <th className="p-3">Tanggal</th>
-                        <th className="p-3 text-center">Item {user.role === 'Training' ? '' : '(Global)'}</th>
+                        <th className="p-3 text-center">Item (Global)</th>
                         {user.role !== 'GM' && <th className="p-3 text-right">Gaji Pokok</th>}
                         <th className="p-3 text-right">Bonus/Royalti</th>
                         {user.role !== 'GM' && <th className="p-3 text-right">Denda</th>}

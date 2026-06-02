@@ -1,7 +1,7 @@
 'use client';
 import { useState, useEffect, useMemo } from 'react';
 import { createClient } from '@supabase/supabase-js';
-import { Check, X, Eye, Loader2, ClipboardList, Wallet, QrCode, Coffee, MessageCircle, Clock, Users } from 'lucide-react';
+import { Check, X, Eye, Loader2, ClipboardList, Wallet, QrCode, Coffee, MessageCircle, Clock, Users, Trophy } from 'lucide-react';
 
 const supabase = createClient(
   process.env.NEXT_PUBLIC_SUPABASE_URL!,
@@ -10,18 +10,42 @@ const supabase = createClient(
 
 const KASIR_SECRET_KEY = 'CHOGOKASIR'; // PASSCODE UNTUK KASIR
 const CUSTOMERS_PER_PAGE = 25;
+const SUPER_ADMIN_ID = '1a24f87a-8ee9-4e19-857a-06ec616d1378'; // GM ID
+const OWNER_ID = 'f2b6a943-4f9e-4b2a-8d1c-99e52e25d2b7'; // Owner ID
+
+const MONTHS = ['Januari', 'Februari', 'Maret', 'April', 'Mei', 'Juni', 'Juli', 'Agustus', 'September', 'Oktober', 'November', 'Desember'];
+
+const getLocalDateString = (dateStr: string) => {
+  const d = new Date(dateStr);
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+};
+
+const getFinancialMonth = (dateStr: string) => {
+  const d = new Date(dateStr);
+  let m = d.getMonth();
+  if (d.getDate() >= 28) { 
+    m = m === 11 ? 0 : m + 1; 
+  }
+  return m;
+};
+
+const selectBgIcon = `url("data:image/svg+xml;charset=UTF-8,%3csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%238C7A6B' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3e%3cpolyline points='6 9 12 15 18 9'%3e%3c/polyline%3e%3c/svg%3e")`;
 
 export default function KasirPage() {
   // --- STATES KEAMANAN & TAB ---
   const [passcode, setPasscode] = useState('');
   const [isAuthorized, setIsAuthorized] = useState(false);
-  const [activeTab, setActiveTab] = useState<'LIVE' | 'LOYALTY'>('LIVE');
+  const [activeTab, setActiveTab] = useState<'LIVE' | 'LOYALTY' | 'PERFORMANCE'>('LIVE');
 
   // --- STATES LIVE ORDER & LAPORAN ---
   const [activeOrders, setActiveOrders] = useState<any[]>([]);
   const [completedOrdersToday, setCompletedOrdersToday] = useState<any[]>([]);
   const [previewImg, setPreviewImg] = useState<string | null>(null);
   const [initialLoading, setInitialLoading] = useState(true);
+
+  // --- STATES PERFORMANCE ---
+  const [logs, setLogs] = useState<any[]>([]);
+  const [filterMonth, setFilterMonth] = useState(getFinancialMonth(new Date().toISOString()));
 
   // --- STATES LOYALTY CARD ---
   const [customerList, setCustomerList] = useState<any[]>([]);
@@ -42,6 +66,7 @@ export default function KasirPage() {
       setIsAuthorized(true); 
       fetchOrders();
       fetchCustomers();
+      fetchPerformanceLogs(); 
     } else { 
       alert('Kunci Akses Kasir Salah!'); 
     }
@@ -64,12 +89,19 @@ export default function KasirPage() {
     if (custData) setCustomerList(custData);
   };
 
+  const fetchPerformanceLogs = async () => {
+      setLoadingAction(true);
+      const { data: logData } = await supabase.from('attendance_logs').select('*').order('created_at', { ascending: false });
+      if (logData) setLogs(logData);
+      setLoadingAction(false);
+  }
+
   useEffect(() => {
-    if (isAuthorized) {
+    if (isAuthorized && activeTab === 'LIVE') {
       const interval = setInterval(fetchOrders, 3000); 
       return () => clearInterval(interval);
     }
-  }, [isAuthorized]);
+  }, [isAuthorized, activeTab]);
 
   // ==========================================
   // LOGIKA LIVE ORDER
@@ -216,6 +248,56 @@ export default function KasirPage() {
   }, [customerList, searchCustomer, currentCustomerPage]);
 
   // ==========================================
+  // LOGIKA PERFORMANCE LEADERBOARD (GLOBAL SYNC)
+  // ==========================================
+  const performanceLeaderboard = useMemo(() => {
+    const filteredLogs = logs.filter(log => filterMonth === -1 || getFinancialMonth(log.created_at) === filterMonth);
+
+    // KUMPULKAN TOTAL GLOBAL HARIAN
+    const dailyGlobalItems: Record<string, number> = {};
+    const dailyGlobalRevenue: Record<string, number> = {};
+    
+    filteredLogs.forEach(log => {
+      const dateKey = getLocalDateString(log.created_at);
+      if (!dailyGlobalItems[dateKey]) {
+        dailyGlobalItems[dateKey] = 0;
+        dailyGlobalRevenue[dateKey] = 0;
+      }
+      if (log.user_id !== SUPER_ADMIN_ID) {
+        dailyGlobalItems[dateKey] += (Number(log.items_sold) || 0);
+        dailyGlobalRevenue[dateKey] += (Number(log.revenue_generated) || 0);
+      }
+    });
+
+    const staffPerformanceMap: Record<string, { daysSet: Set<string> }> = {};
+    
+    filteredLogs.forEach(log => {
+      if (log.user_id === SUPER_ADMIN_ID) return; // Singkirkan GM
+
+      const rawName = log.staff_name || 'Unknown';
+      const cleanName = rawName.replace(/\s*\([^)]*\)/g, '').trim();
+
+      if (!staffPerformanceMap[cleanName]) {
+        staffPerformanceMap[cleanName] = { daysSet: new Set() };
+      }
+      staffPerformanceMap[cleanName].daysSet.add(getLocalDateString(log.created_at));
+    });
+
+    return Object.entries(staffPerformanceMap)
+      .map(([name, stats]) => {
+        let totalRev = 0;
+        let totalItm = 0;
+        stats.daysSet.forEach(dateKey => {
+          totalRev += dailyGlobalRevenue[dateKey] || 0;
+          totalItm += dailyGlobalItems[dateKey] || 0;
+        });
+        return { name, revenue: totalRev, items: totalItm, daysWorked: stats.daysSet.size };
+      })
+      .sort((a, b) => b.revenue - a.revenue);
+  }, [logs, filterMonth]);
+
+
+  // ==========================================
   // RENDER TAMPILAN
   // ==========================================
   if (!isAuthorized) {
@@ -242,14 +324,17 @@ export default function KasirPage() {
         <div className="flex flex-col md:flex-row justify-between items-start md:items-center mb-8 border-b border-[#EBE5D9] pb-4 gap-4">
           <div>
             <h1 className="text-3xl font-black uppercase tracking-tighter">Terminal Kasir Chōgō</h1>
-            <p className="text-[#8D7B68] text-xs font-bold mt-1 tracking-widest uppercase">Pusat Antrean & Loyalty Member</p>
+            <p className="text-[#8D7B68] text-xs font-bold mt-1 tracking-widest uppercase">Pusat Antrean & Kinerja Tim</p>
           </div>
-          <div className="flex gap-2 w-full md:w-auto">
+          <div className="flex flex-wrap gap-2 w-full md:w-auto">
             <button onClick={() => setActiveTab('LIVE')} className={`flex-1 md:flex-none px-6 py-3 rounded-2xl text-[10px] font-black uppercase tracking-widest transition-all flex items-center justify-center gap-2 ${activeTab === 'LIVE' ? 'bg-[#3E2723] text-white shadow-md' : 'bg-white text-[#8D7B68] border border-[#EBE5D9]'}`}>
               <Clock size={16}/> Live Order
             </button>
             <button onClick={() => setActiveTab('LOYALTY')} className={`flex-1 md:flex-none px-6 py-3 rounded-2xl text-[10px] font-black uppercase tracking-widest transition-all flex items-center justify-center gap-2 ${activeTab === 'LOYALTY' ? 'bg-[#D9A05B] text-white shadow-md' : 'bg-white text-[#8D7B68] border border-[#EBE5D9]'}`}>
               <Users size={16}/> Member
+            </button>
+            <button onClick={() => setActiveTab('PERFORMANCE')} className={`w-full md:w-auto px-6 py-3 rounded-2xl text-[10px] font-black uppercase tracking-widest transition-all flex items-center justify-center gap-2 ${activeTab === 'PERFORMANCE' ? 'bg-[#2D5A2D] text-white shadow-md' : 'bg-white text-[#8D7B68] border border-[#EBE5D9]'}`}>
+              <Trophy size={16}/> Performance
             </button>
           </div>
         </div>
@@ -340,7 +425,100 @@ export default function KasirPage() {
               </div>
             </div>
           </>
+        ) : activeTab === 'PERFORMANCE' ? (
+           // ==========================================
+           // TAB PERFORMANCE KASIR
+           // ==========================================
+          <div className="space-y-6 animate-fade-in-down">
+            <div className="bg-white rounded-[32px] border border-[#EBE5D9] p-8 shadow-sm">
+                
+                <div className="flex flex-col md:flex-row justify-between items-start md:items-center mb-8 gap-4 border-b border-[#EBE5D9] pb-6">
+                  <div>
+                    <h3 className="font-black uppercase text-xl tracking-widest text-[#3E2723] flex items-center gap-3">
+                      <Trophy className="text-[#D9A05B]" size={28} /> Leaderboard Kinerja Kasir
+                    </h3>
+                    <p className="text-[#8D7B68] text-xs font-bold mt-1 tracking-widest uppercase">Kompetisi penjualan berdasarkan riwayat absen</p>
+                  </div>
+                  
+                  <div className="flex items-center gap-3 w-full md:w-auto">
+                    <select 
+                      value={filterMonth} 
+                      onChange={(e) => setFilterMonth(parseInt(e.target.value))} 
+                      className="appearance-none h-[48px] bg-[#FAF8F5] border border-[#EBE5D9] px-6 pr-10 rounded-xl text-xs font-black uppercase tracking-widest outline-none cursor-pointer focus:border-[#D9A05B] text-[#3E2723] w-full md:w-auto"
+                      style={{ backgroundImage: selectBgIcon, backgroundPosition: 'right 16px center', backgroundSize: '16px', backgroundRepeat: 'no-repeat' }}
+                    >
+                      <option value={-1}>Selama Bekerja (All-Time)</option>
+                      {MONTHS.map((m, i) => <option key={i} value={i}>Bulan: {m}</option>)}
+                    </select>
+                    <button 
+                      onClick={fetchPerformanceLogs} 
+                      disabled={loadingAction}
+                      className="h-[48px] bg-[#3E2723] text-white px-6 rounded-xl text-xs font-black uppercase tracking-widest hover:bg-[#D9A05B] transition-colors shadow-sm shrink-0 flex items-center justify-center"
+                    >
+                       {loadingAction ? <Loader2 className="animate-spin w-4 h-4" /> : 'RE-SYNC'}
+                    </button>
+                  </div>
+                </div>
+
+                {performanceLeaderboard.length === 0 ? (
+                  <div className="text-center py-16 bg-[#FDF6F0] rounded-2xl border border-[#EBE5D9] border-dashed">
+                    <Trophy className="mx-auto h-12 w-12 text-[#EBE5D9] mb-3" />
+                    <p className="text-sm font-bold text-[#8D7B68] uppercase tracking-widest">Belum ada data penjualan karyawan di bulan ini.</p>
+                  </div>
+                ) : (
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                    {performanceLeaderboard.map((staff, idx) => {
+                      const isTop1 = idx === 0;
+                      const isTop2 = idx === 1;
+                      const isTop3 = idx === 2;
+                      const maxRevenue = performanceLeaderboard[0].revenue || 1;
+                      const percentage = Math.max((staff.revenue / maxRevenue) * 100, 5); 
+
+                      return (
+                        <div key={idx} className={`relative bg-white p-6 rounded-3xl border shadow-sm transition-all hover:-translate-y-1 hover:shadow-md ${isTop1 ? 'border-[#D9A05B] ring-2 ring-[#D9A05B]/20' : 'border-[#EBE5D9]'}`}>
+                          
+                          {/* RANK BADGE */}
+                          <div className={`absolute -top-3 -left-3 w-10 h-10 rounded-full flex items-center justify-center font-black text-white shadow-lg border-2 border-white
+                            ${isTop1 ? 'bg-yellow-400' : isTop2 ? 'bg-gray-400' : isTop3 ? 'bg-orange-400' : 'bg-[#3E2723]'}`}>
+                            #{idx + 1}
+                          </div>
+
+                          {isTop1 && (
+                            <div className="absolute top-4 right-4 bg-[#D9A05B]/10 text-[#D9A05B] px-3 py-1 rounded-full text-[10px] font-black uppercase tracking-widest">MVP Bulan Ini</div>
+                          )}
+
+                          <div className="ml-6">
+                            <h4 className="text-xl font-black text-[#3E2723] uppercase mb-1">{staff.name}</h4>
+                            <p className="text-3xl font-black text-[#2D5A2D] mb-4">{formatRp(staff.revenue)}</p>
+
+                            <div className="space-y-3">
+                              <div className="flex justify-between items-center text-xs font-bold border-b border-[#FDF6F0] pb-2">
+                                <span className="text-[#8D7B68] uppercase tracking-widest">Total Item Terjual</span>
+                                <span className="text-[#3E2723] bg-[#F5F2EE] px-2 py-0.5 rounded">{staff.items} Cups</span>
+                              </div>
+                              <div className="flex justify-between items-center text-xs font-bold pb-1">
+                                <span className="text-[#8D7B68] uppercase tracking-widest">Waktu Bekerja</span>
+                                <span className="text-[#3E2723] bg-[#F5F2EE] px-2 py-0.5 rounded">{staff.daysWorked} Hari Shift</span>
+                              </div>
+                              
+                              <div className="pt-2">
+                                <div className="w-full bg-[#F5F2EE] rounded-full h-2">
+                                  <div className={`h-2 rounded-full ${isTop1 ? 'bg-[#D9A05B]' : 'bg-[#3E2723]'}`} style={{ width: `${percentage}%` }}></div>
+                                </div>
+                              </div>
+                            </div>
+                          </div>
+                        </div>
+                      )
+                    })}
+                  </div>
+                )}
+            </div>
+          </div>
         ) : (
+          // ==========================================
+          // TAB LOYALTY CARD
+          // ==========================================
           <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
             <div className="lg:col-span-2 bg-white rounded-[32px] border border-[#EBE5D9] p-6 shadow-sm">
               <div className="flex flex-col md:flex-row justify-between items-start md:items-center mb-6 gap-4">
