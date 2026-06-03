@@ -1,7 +1,7 @@
 'use client';
 import { useState, useEffect, useMemo } from 'react';
 import { createClient } from '@supabase/supabase-js';
-import { Check, X, Eye, Loader2, ClipboardList, Wallet, QrCode, Coffee, MessageCircle, Clock, Users, Trophy } from 'lucide-react';
+import { Check, X, Eye, Loader2, ClipboardList, Wallet, QrCode, Coffee, MessageCircle, Clock, Users, Trophy, BookOpen, Search } from 'lucide-react';
 
 const supabase = createClient(
   process.env.NEXT_PUBLIC_SUPABASE_URL!,
@@ -31,11 +31,94 @@ const getFinancialMonth = (dateStr: string) => {
 
 const selectBgIcon = `url("data:image/svg+xml;charset=UTF-8,%3csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%238C7A6B' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3e%3cpolyline points='6 9 12 15 18 9'%3e%3c/polyline%3e%3c/svg%3e")`;
 
+// --- DATABASE RESEP CHOGO ---
+const CHOGO_RECIPES = [
+  {
+    category: "Iced White Coffee",
+    items: [
+      { name: "Chogo Classic Creamy", method: "layer", desc: ["20 Creamer", "25 SKM", "100 UHT", "- Mixer", "Es Tube", "30 Espresso", "1 Whipcream"] },
+      { name: "Butterscotch Latte", method: "layer", desc: ["15 Creamer", "10 SKM", "5 Gula Putih", "20 Butterscotch", "100 UHT", "- Mixer", "Es Tube", "30 Espresso", "1 Whipcream & Palm Sugar"] },
+      { name: "Caramel Latte", method: "layer", desc: ["15 Creamer", "10 SKM", "5 Gula Putih", "20 Caramel", "100 UHT", "- Mixer", "Es Tube", "30 Espresso", "1 Whipcream & Caramel Sauce"] },
+      { name: "Hazelnut Latte", method: "layer", desc: ["15 Creamer", "10 SKM", "5 Gula Putih", "20 Hazelnut", "100 UHT", "- Mixer", "Es Tube", "30 Espresso", "1 Whipcream"] },
+      { name: "Aren Latte", method: "layer", desc: ["25 Gula Aren", "1 Espresso", "- Aduk & Tembok", "120 UHT", "10 Creamer", "- Mixer", "Es Tube", "30 Espresso"] },
+      { name: "Latte", method: "layer", desc: ["120 UHT", "Es Tube", "30 Espresso"] },
+      { name: "Cappucino", method: "layer", desc: ["100 UHT", "Es Tube", "30 Espresso", "Foam Fresh Milk (50ml Mixer Sampai Ngembang)", "& Choco Powder"] }
+    ]
+  },
+  {
+    category: "Hot White Coffee",
+    items: [
+      { name: "Hot Latte", method: "mix", desc: ["1 Shot Espresso", "180 Fresh Milk (steamed foam tipis)"] },
+      { name: "Hot Cappucino", method: "mix", desc: ["1 Shot Espresso", "180 Fresh Milk (steamed foam tebal)"] },
+      { name: "Hot Aren Latte", method: "mix", desc: ["20 Aren", "1 Shot Espresso", "- Aduk", "180 Fresh Milk (steamed foam tipis)"] },
+      { name: "Hot Caramel Latte", method: "mix", desc: ["1 Shot Espresso", "20 Caramel", "180 Fresh Milk (steamed foam tipis)"] },
+      { name: "Hot Hazelnut Latte", method: "mix", desc: ["1 Shot Espresso", "20 Hazelnut", "180 Fresh Milk (steamed foam tipis)"] }
+    ]
+  },
+  {
+    category: "Iced Black Coffee",
+    items: [
+      { name: "Americano", method: "layer", desc: ["100 Air", "Es Tube", "30 Espresso"] },
+      { name: "Lemon Americano", method: "shake & layer", desc: ["25 Simple Syrup", "30 Lemon", "100 Air", "Es Tube", "- Shake", "30 Espresso", "1 Lemon Dehydrated"] },
+      { name: "Peachberrycano", method: "shake & layer", desc: ["10 Peach", "5 Raspberry", "10 Gula Putih", "5 Lemon", "100 Air", "Es Tube", "- Shake", "30 Espresso", "1 Lemon Dehydrated"] }
+    ]
+  },
+  {
+    category: "Hot Black Coffee",
+    items: [
+      { name: "Hot Americano", method: "mix", desc: ["1 Shot Espresso", "120ml Air Panas 90c"] }
+    ]
+  },
+  {
+    category: "Iced Non Coffee",
+    items: [
+      { name: "Choco Classic", method: "mixer", desc: ["10 Choco Powder", "15 SKM", "15 Gula Putih", "120 UHT", "- Mixer", "Es Tube", "Whipcream & Choco Powder"] },
+      { name: "Choco Caramel", method: "mixer", desc: ["10 Choco Powder", "15 Caramel", "10 Gula Putih", "10 SKM", "120 UHT", "- Mixer", "Es Tube", "Whipcream & Caramel Sauce"] },
+      { name: "Choco Hazelnut", method: "mixer", desc: ["10 Choco Powder", "15 Hazelnut", "10 Gula Putih", "10 SKM", "120 UHT", "- Mixer", "Ice Tube", "Whipcream"] },
+      { name: "Matcha Latte", method: "layer", desc: ["3 Matcha", "5 Creamer", "10 SKM", "15 Gula Putih", "30 Air Panas", "- Mixer", "100 UHT", "Es Tube"] },
+      { name: "Strawberry Matcha", method: "layer", desc: ["30 Strawberry Jam (di cup)", "30 Air Panas", "3 Matcha", "5 Creamer", "10 SKM", "15 Gula Putih", "- Mixer", "100 UHT", "Es Tube"] },
+      { name: "Cookies & Cream", method: "layer", desc: ["2 1/2 Oreo di Muddler (di cup)", "10 Gula Putih", "10 SKM", "10 Creamer", "120 UHT", "- Mixer", "Es Tube", "Whipcream & 1/2 Oreo Garnish"] },
+      { name: "Oreo Chocolate Milk", method: "layer", desc: ["2 1/2 Oreo Muddler", "10 Choco Powder", "10 SKM", "10 Gula Putih", "120 UHT", "- Mixer", "Es Tube", "Whipcream & 1/2 Oreo Garnish"] },
+      { name: "Red Velvet", method: "layer", desc: ["10 Red Velvet", "10 Creamer", "20 Gula Putih", "20 SKM", "30 Air Panas", "- Mixer", "90 UHT", "Es Tube", "Whipcream & Red Velvet Crumble"] },
+      { name: "Strawberry Milk", method: "layer", desc: ["50 Strawberry Jam (di cup)", "10 Creamer", "10 Gula Putih", "120 UHT", "- Mixer", "Es Tube"] },
+      { name: "Lychee Butterfly", method: "layer", desc: ["25 Gula Putih", "30 Lemon", "120 Mogu-Mogu", "Ice Tube", "80 Bunga Telang"] },
+      { name: "Lemon Tea", method: "mixer", desc: ["35 Nestea", "30 Air Panas", "- Mixer", "120 Air Biasa", "1 Lemon Dehydrated"] }
+    ]
+  },
+  {
+    category: "Hot Non Coffee",
+    items: [
+      { name: "Hot Lemon Tea", method: "mixer", desc: ["30 Nestea", "150 Air Panas", "- Mixer"] },
+      { name: "Hot Choco Classic", method: "mixer", desc: ["10 Choco Powder", "30 Air Panas", "30 Gula Putih", "- Mixer", "180 Fresh Milk (steamed)"] },
+      { name: "Hot Choco Caramel", method: "mixer", desc: ["10 Choco Powder", "30 Air Panas", "20 Caramel", "- Mixer", "180 Fresh Milk (steamed)"] },
+      { name: "Hot Choco Hazelnut", method: "mixer", desc: ["10 Choco Powder", "30 Air Panas", "20 Hazelnut", "- Mixer", "180 fresh milk (steamed)"] }
+    ]
+  },
+  {
+    category: "Food & Snack",
+    items: [
+      { name: "French Fries", method: "fry", desc: ["125 Kentang", "3 Sauce", "Garam Dapur, Paprika, Parsley Secukupnya"] },
+      { name: "Sosis", method: "fry", desc: ["3 Sosis", "3 Sauce"] },
+      { name: "Chicken Popcorn", method: "fry", desc: ["100 Chicken Popcorn", "3 Sauce", "Parsley Secukupnya"] },
+      { name: "Dimsum Kuah Keju", method: "boil", desc: ["4 Dimsum", "10 Cheese Powder", "1 Royco", "100 Air Panas", "1 Chili Oil"] },
+      { name: "Cireng Kuah Keju", method: "boil", desc: ["6 Cireng", "10 Cheese Powder", "1 Royco", "100 Air Panas", "1 Chili Oil"] }
+    ]
+  },
+  {
+    category: "Preparation (Prep)",
+    items: [
+      { name: "Gula Putih", method: "prep", desc: ["Rasio 1:1", "1 Air Panas = 1 Gula"] },
+      { name: "Ekstrak Teh Bunga Telang", method: "prep", desc: ["12 Keping Bunga Telang", "180 Air Panas"] },
+      { name: "Chilled Espresso", method: "prep", desc: ["18gr Bubuk Kopi", "60gr Yield (Target: 45-55 detik)"] }
+    ]
+  }
+];
+
 export default function KasirPage() {
   // --- STATES KEAMANAN & TAB ---
   const [passcode, setPasscode] = useState('');
   const [isAuthorized, setIsAuthorized] = useState(false);
-  const [activeTab, setActiveTab] = useState<'LIVE' | 'LOYALTY' | 'PERFORMANCE'>('LIVE');
+  const [activeTab, setActiveTab] = useState<'LIVE' | 'LOYALTY' | 'PERFORMANCE' | 'RESEP'>('LIVE');
 
   // --- STATES LIVE ORDER & LAPORAN ---
   const [activeOrders, setActiveOrders] = useState<any[]>([]);
@@ -56,6 +139,9 @@ export default function KasirPage() {
   const [searchCustomer, setSearchCustomer] = useState('');
   const [currentCustomerPage, setCurrentCustomerPage] = useState(1);
   const [loadingAction, setLoadingAction] = useState(false);
+
+  // --- STATES RESEP ---
+  const [searchRecipe, setSearchRecipe] = useState('');
 
   // ==========================================
   // LOGIN LOGIC
@@ -187,7 +273,7 @@ export default function KasirPage() {
   );
 
   // ==========================================
-  // LOGIKA LOYALTY CARD (DARI ADMIN)
+  // LOGIKA LOYALTY CARD
   // ==========================================
   const handleSaveCustomer = async (e: React.FormEvent) => {
     e.preventDefault(); if (!custName || !custPhone) return; setLoadingAction(true);
@@ -226,8 +312,8 @@ export default function KasirPage() {
     let cleanPhone = phone.replace(/[^0-9]/g, '');
     if (cleanPhone.startsWith('0')) { cleanPhone = '62' + cleanPhone.slice(1); }
     let text = stamps >= 10 
-      ? `Halo Kak ${name}, kami dari Chogo Coffee ingin menginfokan bahwa stamp Kakak sudah penuh (${stamps} stamp). Kakak sudah bisa menukarkannya dengan 1 kopi gratis di outlet Chogo Coffee. Sampai jumpa di outlet Kak!` 
-      : `Halo Kak ${name}, kami dari Chogo Coffee ingin menginfokan bahwa kartu loyalitas Kakak sudah mencapai ${stamps} stamp nih. Sedikit lagi penuh untuk klaim 1 kopi gratis. Ditunggu kedatangannya kembali di outlet ya Kak!`;
+      ? `Halo Kak ${name}, ada kabar baik dari Chogo Coffee. Kartu loyalitas digital Kakak saat ini sudah penuh dan mencapai 10 stamp.\n\nKakak sudah berhak menukarkannya dengan 1 item kopi gratis langsung di outlet Chogo Coffee. Saat berkunjung nanti, Kakak cukup tunjukkan nomor WhatsApp yang terdaftar ini kepada kasir kami yang bertugas.\n\nSelamat menikmati kopi gratisnya dan sampai jumpa di outlet Chogo Coffee, Kak.` 
+      : `Halo Kak ${name}, kami dari Chogo Coffee ingin menginfokan bahwa kartu loyalitas digital Kakak sudah mencapai ${stamps} stamp nih.\n\nSedikit lagi kartu stamp Kakak akan penuh untuk diklaim dengan 1 jatah kopi gratis di outlet kami.\n\nKami tunggu kedatangan Kakak kembali di outlet Chogo Coffee ya. Kakak juga bisa mengecek jumlah stamp kartu loyalitas Kakak kapan saja secara mandiri melalui tautan chogocoffee.com/loyalty. Terima kasih dan sampai jumpa, Kak.`;
     return `https://wa.me/${cleanPhone}?text=${encodeURIComponent(text)}`;
   };
 
@@ -327,13 +413,16 @@ export default function KasirPage() {
             <p className="text-[#8D7B68] text-xs font-bold mt-1 tracking-widest uppercase">Pusat Antrean & Kinerja Tim</p>
           </div>
           <div className="flex flex-wrap gap-2 w-full md:w-auto">
-            <button onClick={() => setActiveTab('LIVE')} className={`flex-1 md:flex-none px-6 py-3 rounded-2xl text-[10px] font-black uppercase tracking-widest transition-all flex items-center justify-center gap-2 ${activeTab === 'LIVE' ? 'bg-[#3E2723] text-white shadow-md' : 'bg-white text-[#8D7B68] border border-[#EBE5D9]'}`}>
+            <button onClick={() => setActiveTab('LIVE')} className={`flex-1 md:flex-none px-5 py-3 rounded-2xl text-[10px] font-black uppercase tracking-widest transition-all flex items-center justify-center gap-2 ${activeTab === 'LIVE' ? 'bg-[#3E2723] text-white shadow-md' : 'bg-white text-[#8D7B68] border border-[#EBE5D9]'}`}>
               <Clock size={16}/> Live Order
             </button>
-            <button onClick={() => setActiveTab('LOYALTY')} className={`flex-1 md:flex-none px-6 py-3 rounded-2xl text-[10px] font-black uppercase tracking-widest transition-all flex items-center justify-center gap-2 ${activeTab === 'LOYALTY' ? 'bg-[#D9A05B] text-white shadow-md' : 'bg-white text-[#8D7B68] border border-[#EBE5D9]'}`}>
+            <button onClick={() => setActiveTab('RESEP')} className={`flex-1 md:flex-none px-5 py-3 rounded-2xl text-[10px] font-black uppercase tracking-widest transition-all flex items-center justify-center gap-2 ${activeTab === 'RESEP' ? 'bg-[#D9A05B] text-white shadow-md' : 'bg-white text-[#8D7B68] border border-[#EBE5D9]'}`}>
+              <BookOpen size={16}/> Resep
+            </button>
+            <button onClick={() => setActiveTab('LOYALTY')} className={`flex-1 md:flex-none px-5 py-3 rounded-2xl text-[10px] font-black uppercase tracking-widest transition-all flex items-center justify-center gap-2 ${activeTab === 'LOYALTY' ? 'bg-[#D9A05B] text-white shadow-md' : 'bg-white text-[#8D7B68] border border-[#EBE5D9]'}`}>
               <Users size={16}/> Member
             </button>
-            <button onClick={() => setActiveTab('PERFORMANCE')} className={`w-full md:w-auto px-6 py-3 rounded-2xl text-[10px] font-black uppercase tracking-widest transition-all flex items-center justify-center gap-2 ${activeTab === 'PERFORMANCE' ? 'bg-[#2D5A2D] text-white shadow-md' : 'bg-white text-[#8D7B68] border border-[#EBE5D9]'}`}>
+            <button onClick={() => setActiveTab('PERFORMANCE')} className={`w-full md:w-auto px-5 py-3 rounded-2xl text-[10px] font-black uppercase tracking-widest transition-all flex items-center justify-center gap-2 ${activeTab === 'PERFORMANCE' ? 'bg-[#2D5A2D] text-white shadow-md' : 'bg-white text-[#8D7B68] border border-[#EBE5D9]'}`}>
               <Trophy size={16}/> Performance
             </button>
           </div>
@@ -425,6 +514,82 @@ export default function KasirPage() {
               </div>
             </div>
           </>
+        ) : activeTab === 'RESEP' ? (
+          // ==========================================
+          // TAB BUKU RESEP CHOGO
+          // ==========================================
+          <div className="space-y-6 animate-fade-in-down">
+            <div className="bg-white rounded-[32px] border border-[#EBE5D9] p-6 md:p-8 shadow-sm">
+              <div className="flex flex-col md:flex-row justify-between items-start md:items-center mb-8 gap-4 border-b border-[#FDF6F0] pb-6">
+                <div>
+                  <h3 className="font-black uppercase text-xl tracking-widest text-[#3E2723] flex items-center gap-3">
+                    <BookOpen className="text-[#D9A05B]" size={28} /> SOP Resep Bar
+                  </h3>
+                  <p className="text-[#8D7B68] text-xs font-bold mt-1 tracking-widest uppercase">Panduan takaran & metode penyajian</p>
+                </div>
+                <div className="relative w-full md:w-72">
+                  <div className="absolute inset-y-0 left-0 pl-4 flex items-center pointer-events-none">
+                    <Search size={16} className="text-[#D9A05B]" />
+                  </div>
+                  <input 
+                    type="text" 
+                    placeholder="Cari nama menu..." 
+                    value={searchRecipe}
+                    onChange={(e) => setSearchRecipe(e.target.value)}
+                    className="w-full h-[48px] border border-[#EBE5D9] pl-10 pr-4 rounded-2xl text-xs font-bold bg-[#FAF8F5] outline-none focus:border-[#D9A05B]"
+                  />
+                </div>
+              </div>
+
+              {/* PERUBAHAN KE MASONRY LAYOUT (COLUMNS) AGAR PADAT & TIDAK ADA WHITE SPACE */}
+              <div className="columns-1 md:columns-2 lg:columns-3 gap-6">
+                {CHOGO_RECIPES.map((category, cIdx) => {
+                  const filteredItems = category.items.filter(item => 
+                    item.name.toLowerCase().includes(searchRecipe.toLowerCase())
+                  );
+
+                  if (filteredItems.length === 0) return null;
+
+                  return (
+                    <div key={cIdx} className="bg-[#FDF6F0] border border-[#EBE5D9] rounded-3xl p-5 shadow-sm mb-6 break-inside-avoid inline-block w-full">
+                      <h4 className="font-black text-[#D9A05B] uppercase tracking-widest text-sm mb-4 pb-2 border-b border-[#EBE5D9]">
+                        {category.category}
+                      </h4>
+                      <div className="space-y-4">
+                        {filteredItems.map((recipe, rIdx) => (
+                          <div key={rIdx} className="bg-white p-4 rounded-2xl shadow-sm border border-[#EBE5D9]">
+                            <div className="flex justify-between items-start mb-3">
+                              <h5 className="font-black text-[#3E2723] text-sm">{recipe.name}</h5>
+                              <span className="bg-[#FAF8F5] text-[#8D7B68] border border-[#EBE5D9] px-2 py-0.5 rounded text-[9px] font-black uppercase tracking-widest">
+                                {recipe.method}
+                              </span>
+                            </div>
+                            <ul className="space-y-1.5">
+                              {recipe.desc.map((step, sIdx) => {
+                                const isAction = step.startsWith('-');
+                                return (
+                                  <li key={sIdx} className={`text-xs flex items-start gap-2 ${isAction ? 'font-black text-[#D9A05B] mt-2' : 'font-medium text-[#5A4A42]'}`}>
+                                    {!isAction && <span className="text-[#D9A05B] mt-0.5">•</span>}
+                                    {step.replace('-', '').trim()}
+                                  </li>
+                                );
+                              })}
+                            </ul>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+              
+              {CHOGO_RECIPES.every(c => c.items.filter(i => i.name.toLowerCase().includes(searchRecipe.toLowerCase())).length === 0) && (
+                <div className="text-center py-16">
+                  <p className="text-[#8D7B68] font-black uppercase tracking-widest">Resep "{searchRecipe}" tidak ditemukan.</p>
+                </div>
+              )}
+            </div>
+          </div>
         ) : activeTab === 'PERFORMANCE' ? (
            // ==========================================
            // TAB PERFORMANCE KASIR
