@@ -45,7 +45,7 @@ export default function LoyaltyCardPortal() {
         {!customer ? (
           <form onSubmit={handleCheckLoyalty} className="space-y-4">
             <div>
-              <label className="block text-[10px] font-black text-[#8C7A6B] mb-2 uppercase tracking-widest">Masukkan No. WhatsApp Member</label>
+              <label className="block text-[10px] font-black text-[#8C7A6B] mb-2 uppercase tracking-widest">Masukkan No. WA Member</label>
               <input 
                 type="text" 
                 placeholder="Cth: 08123456789" 
