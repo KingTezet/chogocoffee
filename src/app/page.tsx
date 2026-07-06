@@ -1,6 +1,7 @@
 'use client';
 import { useState, useEffect, useRef, ReactNode } from 'react';
 import Link from 'next/link';
+import InstallPWAButton from '../components/InstallPWAButton';
 
 // --- KOMPONEN ANIMASI SCROLL ---
 const FadeUp = ({ children, delay = 0 }: { children: ReactNode, delay?: number }) => {
@@ -149,9 +150,12 @@ export default function LandingPage() {
           <button onClick={() => scrollToSection('menu')} className="hover:text-[#3A2A1A] transition-colors">Menu</button>
           <button onClick={() => scrollToSection('story')} className="hover:text-[#3A2A1A] transition-colors">Story</button>
         </div>
-        <button onClick={() => scrollToSection('menu')} className="bg-[#3A2A1A] text-white px-6 py-2.5 rounded-full text-xs font-bold uppercase tracking-widest hover:bg-[#C69C6D] transition-all">
-          Order Now
-        </button>
+        <div className="flex items-center gap-3">
+          <InstallPWAButton />
+          <button onClick={() => scrollToSection('menu')} className="bg-[#3A2A1A] text-white px-6 py-2.5 rounded-full text-xs font-bold uppercase tracking-widest hover:bg-[#C69C6D] transition-all">
+            Order Now
+          </button>
+        </div>
       </nav>
 
       {/* 2. HERO SECTION */}
