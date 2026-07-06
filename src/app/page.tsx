@@ -147,14 +147,14 @@ export default function LandingPage() {
         </div>
         <div className="hidden md:flex gap-8 text-xs font-bold uppercase tracking-widest text-[#8C7A6B]">
           <button onClick={() => scrollToSection('home')} className="hover:text-[#3A2A1A] transition-colors">Home</button>
-          <button onClick={() => scrollToSection('menu')} className="hover:text-[#3A2A1A] transition-colors">Menu</button>
+          <Link href="/menu" className="hover:text-[#3A2A1A] transition-colors block">Menu</Link>
           <button onClick={() => scrollToSection('story')} className="hover:text-[#3A2A1A] transition-colors">Story</button>
         </div>
         <div className="flex items-center gap-3">
           <InstallPWAButton />
-          <button onClick={() => scrollToSection('menu')} className="bg-[#3A2A1A] text-white px-6 py-2.5 rounded-full text-xs font-bold uppercase tracking-widest hover:bg-[#C69C6D] transition-all">
+          <Link href="/menu" className="bg-[#3A2A1A] text-white px-6 py-2.5 rounded-full text-xs font-bold uppercase tracking-widest hover:bg-[#C69C6D] transition-all inline-block">
             Order Now
-          </button>
+          </Link>
         </div>
       </nav>
 
@@ -168,18 +168,18 @@ export default function LandingPage() {
             <h2 className="text-white text-5xl md:text-[85px] font-black uppercase tracking-tighter leading-[0.85] mb-8 drop-shadow-lg">
               WHERE EVERY<br />BREW BEGINS
             </h2>
-            <button onClick={() => scrollToSection('menu')} className="bg-white text-[#3A2A1A] px-10 py-5 rounded-full font-bold uppercase tracking-widest text-sm flex items-center gap-3 hover:bg-[#C69C6D] hover:text-white transition-all shadow-xl">
+            <Link href="/menu" className="bg-white text-[#3A2A1A] px-10 py-5 rounded-full font-bold uppercase tracking-widest text-sm flex items-center gap-3 w-max hover:bg-[#C69C6D] hover:text-white transition-all shadow-xl">
               Get Started <span className="text-xl">↗</span>
-            </button>
+            </Link>
           </div>
           {/* C. SOSOK BARISTA (FIX LAPTOP BESAR, HP PAS) */}
-<div className="absolute bottom-0 left-0 w-full flex justify-center items-end z-20 pointer-events-none">
-  <img 
-    src="/hero.png" 
-    alt="Barista" 
-    className="w-[90%] max-w-[380px] md:max-w-[750px] h-auto max-h-[60vh] md:max-h-none object-contain object-bottom" 
-  />
-</div>
+          <div className="absolute bottom-0 left-0 w-full flex justify-center items-end z-20 pointer-events-none">
+            <img 
+              src="/hero.png" 
+              alt="Barista" 
+              className="w-[90%] max-w-[380px] md:max-w-[750px] h-auto max-h-[60vh] md:max-h-none object-contain object-bottom" 
+            />
+          </div>
           <div className="absolute right-10 md:right-20 bottom-10 md:bottom-20 z-30 flex flex-col items-end bg-[#3A2A1A]/30 backdrop-blur-md p-4 rounded-3xl border border-white/10">
             <div className="flex gap-1 mb-2">
               {[1,2,3,4,5].map(star => <span key={star} className="text-[#C69C6D] text-2xl">★</span>)}
@@ -240,9 +240,9 @@ export default function LandingPage() {
                 <div className="text-center mt-auto">
                   <h3 className="text-sm md:text-md font-black uppercase tracking-tight mb-1 line-clamp-1">{item.name}</h3>
                   <p className="text-[#C69C6D] font-black text-sm mb-4">{item.price}</p>
-                  <button className="w-full bg-[#FAF8F5] border border-[#EBE5D9] text-[#3A2A1A] py-3 rounded-xl font-black uppercase tracking-widest text-[10px] group-hover:bg-[#3A2A1A] group-hover:text-white transition-all">
+                  <Link href="/menu" className="block w-full text-center bg-[#FAF8F5] border border-[#EBE5D9] text-[#3A2A1A] py-3 rounded-xl font-black uppercase tracking-widest text-[10px] group-hover:bg-[#3A2A1A] group-hover:text-white transition-all">
                     Order Now
-                  </button>
+                  </Link>
                 </div>
               </div>
             </FadeUp>
@@ -334,9 +334,9 @@ export default function LandingPage() {
                   <p className="text-[#8C7A6B] font-medium text-lg mb-8 leading-relaxed">
                     {item.desc}
                   </p>
-                  <button className="bg-[#3A2A1A] text-white px-8 py-4 rounded-full font-bold uppercase tracking-widest text-xs w-max hover:bg-[#C69C6D] transition-colors">
+                  <Link href="/menu" className="inline-block text-center bg-[#3A2A1A] text-white px-8 py-4 rounded-full font-bold uppercase tracking-widest text-xs w-max hover:bg-[#C69C6D] transition-colors">
                     Order Now ↗
-                  </button>
+                  </Link>
                 </div>
               </div>
             </FadeUp>
@@ -379,9 +379,9 @@ export default function LandingPage() {
           <div className="grid grid-cols-2 gap-8 md:ml-auto">
             <div className="flex flex-col gap-4 text-xs font-bold uppercase tracking-widest text-white/70">
               <h4 className="text-white mb-2">Navigation</h4>
-              <button onClick={() => scrollToSection('home')} className="hover:text-white text-left">Home</button>
-              <button onClick={() => scrollToSection('menu')} className="hover:text-white text-left">Menu</button>
-              <button onClick={() => scrollToSection('story')} className="hover:text-white text-left">Story</button>
+              <button onClick={() => scrollToSection('home')} className="hover:text-white text-left block">Home</button>
+              <Link href="/menu" className="hover:text-white text-left block">Menu</Link>
+              <button onClick={() => scrollToSection('story')} className="hover:text-white text-left block">Story</button>
             </div>
           </div>
         </div>
