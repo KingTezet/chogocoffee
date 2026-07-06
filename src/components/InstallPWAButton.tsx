@@ -164,64 +164,63 @@ export default function InstallPWAButton() {
 
       {/* ── iOS TOAST ── */}
       {showIOSToast && (
-        <div
-          role="status"
-          aria-live="polite"
-          className="
-            fixed bottom-6 left-1/2 -translate-x-1/2 z-[9999]
-            bg-[#3A2A1A] text-white
-            px-6 py-4
-            rounded-2xl shadow-2xl
-            flex items-start gap-3
-            max-w-[320px] w-[calc(100%-3rem)]
-            animate-fade-in-up
-          "
-        >
-          {/* Share icon */}
-          <svg
-            viewBox="0 0 24 24"
-            fill="none"
-            className="w-5 h-5 shrink-0 mt-0.5 text-[#C69C6D]"
+        <div className="fixed bottom-6 left-0 right-0 z-[9999] flex justify-center px-4 pointer-events-none">
+          <div
+            role="status"
+            aria-live="polite"
+            className="
+              pointer-events-auto
+              bg-[#3A2A1A] text-white
+              px-6 py-4
+              rounded-2xl shadow-2xl
+              flex items-start gap-3
+              w-full max-w-[320px]
+              animate-fade-in-up
+            "
           >
-            <path
-              d="M12 2v12M8 6l4-4 4 4M4 17v1a2 2 0 002 2h12a2 2 0 002-2v-1"
-              stroke="currentColor"
-              strokeWidth="2"
-              strokeLinecap="round"
-              strokeLinejoin="round"
-            />
-          </svg>
-          <div>
-            <p className="font-black text-xs uppercase tracking-widest mb-1 text-[#C69C6D]">
-              Install on iPhone
-            </p>
-            <p className="text-xs text-white/80 leading-relaxed">
-              Tap the{" "}
-              <span className="font-bold text-white">
-                Share
-              </span>{" "}
-              button in Safari, then select{" "}
-              <span className="font-bold text-white">
-                &quot;Add to Home Screen&quot;
-              </span>
-              .
-            </p>
+            {/* Share icon */}
+            <svg
+              viewBox="0 0 24 24"
+              fill="none"
+              className="w-5 h-5 shrink-0 mt-0.5 text-[#C69C6D]"
+            >
+              <path
+                d="M12 2v12M8 6l4-4 4 4M4 17v1a2 2 0 002 2h12a2 2 0 002-2v-1"
+                stroke="currentColor"
+                strokeWidth="2"
+                strokeLinecap="round"
+                strokeLinejoin="round"
+              />
+            </svg>
+            <div>
+              <p className="font-black text-xs uppercase tracking-widest mb-1 text-[#C69C6D]">
+                Install on iPhone
+              </p>
+              <p className="text-xs text-white/80 leading-relaxed">
+                Tap the <span className="font-bold text-white">Share</span>{" "}
+                button in Safari, then select{" "}
+                <span className="font-bold text-white">
+                  &quot;Add to Home Screen&quot;
+                </span>
+                .
+              </p>
+            </div>
+            <button
+              onClick={() => setShowIOSToast(false)}
+              aria-label="Close"
+              className="ml-auto shrink-0 text-white/50 hover:text-white text-lg leading-none"
+            >
+              ×
+            </button>
           </div>
-          <button
-            onClick={() => setShowIOSToast(false)}
-            aria-label="Close"
-            className="ml-auto shrink-0 text-white/50 hover:text-white text-lg leading-none"
-          >
-            ×
-          </button>
         </div>
       )}
 
-      {/* inline keyframe for toast (Tailwind v4 compatible) */}
+      {/* inline keyframe for toast (Animasi diperbarui agar tidak geser ke kiri) */}
       <style>{`
         @keyframes fade-in-up {
-          from { opacity: 0; transform: translate(-50%, 12px); }
-          to   { opacity: 1; transform: translate(-50%, 0); }
+          from { opacity: 0; transform: translateY(12px); }
+          to   { opacity: 1; transform: translateY(0); }
         }
         .animate-fade-in-up { animation: fade-in-up 0.3s ease-out both; }
       `}</style>
