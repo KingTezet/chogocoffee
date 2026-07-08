@@ -1,4 +1,6 @@
 'use client';
+import Link from 'next/link';
+import ExportAnalyticsButton from '@/components/ExportAnalyticsButton';
 import { useState, useEffect, useMemo } from 'react';
 import { createClient } from '@supabase/supabase-js';
 
@@ -473,17 +475,54 @@ export default function AdminDashboard() {
           </div>
         )}
 
-        <div className="flex flex-col md:flex-row justify-between items-end md:items-center mb-10 gap-4">
-          <div>
+        {/* ── EXECUTIVE NAVBAR ─────────────────────────────────────────────
+             Layout (left → right):
+               [Title + subtitle]   [Analytics link] [Export CSV] [Month select] [Sync]
+        ──────────────────────────────────────────────────────────────────────────── */}
+        <div className="flex flex-col lg:flex-row justify-between items-start lg:items-center mb-10 gap-4">
+          {/* Brand */}
+          <div className="shrink-0">
             <h1 className="text-4xl font-serif font-black tracking-tight">Chōgō Command Center</h1>
             <p className="text-sm text-[#8C7A6B] font-medium mt-1">Sistem Terintegrasi Absensi, Payroll & Keuangan</p>
           </div>
-          <div className="flex items-center gap-4 w-full md:w-auto">
-            <select value={filterMonth} onChange={(e) => setFilterMonth(parseInt(e.target.value))} className="appearance-none h-[56px] bg-white border border-[#EBE5D9] px-6 pr-10 rounded-2xl text-xs font-black uppercase tracking-widest outline-none shadow-sm cursor-pointer hover:border-[#C69C6D] text-[#3A2A1A] w-full md:w-auto" style={{ backgroundImage: selectBgIcon, backgroundPosition: 'right 16px center', backgroundSize: '16px', backgroundRepeat: 'no-repeat' }}>
+
+          {/* Controls — scroll horizontally on small screens */}
+          <div className="flex items-center gap-3 w-full lg:w-auto overflow-x-auto pb-1 lg:pb-0 flex-nowrap">
+
+            {/* 1. Link → Analytics Dashboard */}
+            <Link
+              href="/admin/analytics"
+              className="inline-flex items-center gap-2 h-[48px] px-4 rounded-2xl text-[10px] font-black uppercase tracking-widest bg-gradient-to-r from-[#3A2A1A] to-[#2A1E12] text-[#C69C6D] border border-[#C69C6D]/30 hover:border-[#C69C6D] hover:text-white transition-all shadow-sm whitespace-nowrap shrink-0"
+            >
+              <svg className="h-3.5 w-3.5 shrink-0" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                <path strokeLinecap="round" strokeLinejoin="round" d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z" />
+              </svg>
+              Analytics
+            </Link>
+
+            {/* 2. Export CSV — receives live filterMonth so button label + query
+                 always reflect the active dropdown selection.
+                 year=2026 hardcoded here; change as needed. */}
+            <div className="shrink-0">
+              <ExportAnalyticsButton month={filterMonth} year={2026} />
+            </div>
+
+            {/* 3. Month selector (existing) */}
+            <select
+              value={filterMonth}
+              onChange={(e) => setFilterMonth(parseInt(e.target.value))}
+              className="appearance-none h-[48px] bg-white border border-[#EBE5D9] px-4 pr-9 rounded-2xl text-xs font-black uppercase tracking-widest outline-none shadow-sm cursor-pointer hover:border-[#C69C6D] text-[#3A2A1A] shrink-0"
+              style={{ backgroundImage: selectBgIcon, backgroundPosition: 'right 12px center', backgroundSize: '14px', backgroundRepeat: 'no-repeat' }}
+            >
               <option value={-1}>Semua Data</option>
               {MONTHS.map((m, i) => <option key={i} value={i}>Bulan: {m}</option>)}
             </select>
-            <button onClick={fetchData} className="h-[56px] bg-[#3A2A1A] text-white px-8 rounded-2xl text-xs font-black uppercase tracking-widest hover:bg-[#C69C6D] transition-all shadow-sm shrink-0 flex items-center justify-center gap-2">
+
+            {/* 4. Sync button (existing) */}
+            <button
+              onClick={fetchData}
+              className="h-[48px] bg-[#3A2A1A] text-white px-6 rounded-2xl text-xs font-black uppercase tracking-widest hover:bg-[#C69C6D] transition-all shadow-sm shrink-0 flex items-center justify-center gap-2"
+            >
               <svg xmlns="http://www.w3.org/2000/svg" className={`h-4 w-4 ${loading ? 'animate-spin' : ''}`} fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
                 <path strokeLinecap="round" strokeLinejoin="round" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
               </svg>
@@ -765,6 +804,44 @@ export default function AdminDashboard() {
                 <div className="bg-[#F5F2EE] text-[#8C7A6B] p-4 rounded-full">
                   <svg xmlns="http://www.w3.org/2000/svg" className="h-8 w-8" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 13.255A23.931 23.931 0 0112 15c-3.183 0-6.22-.62-9-1.745M16 6V4a2 2 0 00-2-2h-4a2 2 0 00-2 2v2m4 6h.01M5 20h14a2 2 0 002-2V8a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z" /></svg>
                 </div>
+              </div>
+            </div>
+
+            {/* 5. ANALYTICS ACTION CARD */}
+            <div className="bg-gradient-to-br from-[#2A1E12] to-[#110C07] p-6 rounded-[24px] border border-[#C69C6D]/30 shadow-lg">
+              <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-5">
+                <div>
+                  <p className="text-[10px] font-black text-[#C69C6D] uppercase tracking-[0.3em] mb-1">Data Science</p>
+                  <h3 className="text-xl font-serif font-black text-white mb-1">Analytics Dashboard</h3>
+                  <p className="text-xs text-[#8C7A6B] font-medium leading-relaxed">
+                    Export data transaksi bulan ini ke CSV, lalu upload ke Analytics Dashboard<br className="hidden md:block" />
+                    untuk melihat Pivot Chart, Linear Regression Forecast, dan KPI analysis.
+                  </p>
+                </div>
+                <div className="flex flex-col sm:flex-row gap-3 shrink-0">
+                  {/* Step 1: Export */}
+                  <ExportAnalyticsButton month={filterMonth} year={2026} />
+                  {/* Step 2: Go to Analytics */}
+                  <a
+                    href="/admin/analytics"
+                    className="inline-flex items-center gap-2 h-[48px] px-5 bg-[#C69C6D] text-white rounded-2xl text-[11px] font-black uppercase tracking-widest hover:bg-[#D9A05B] transition-all shadow-sm whitespace-nowrap"
+                  >
+                    <svg className="h-4 w-4" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                      <path strokeLinecap="round" strokeLinejoin="round" d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z" />
+                    </svg>
+                    Buka Analytics →
+                  </a>
+                </div>
+              </div>
+              <div className="mt-4 flex items-center gap-2 text-[10px] font-bold text-[#8C7A6B]">
+                <span className="w-5 h-5 rounded-full bg-[#C69C6D]/20 text-[#C69C6D] flex items-center justify-center font-black text-[9px]">1</span>
+                Export CSV
+                <span className="text-[#C69C6D]/40 mx-1">→</span>
+                <span className="w-5 h-5 rounded-full bg-[#C69C6D]/20 text-[#C69C6D] flex items-center justify-center font-black text-[9px]">2</span>
+                Buka Analytics
+                <span className="text-[#C69C6D]/40 mx-1">→</span>
+                <span className="w-5 h-5 rounded-full bg-[#C69C6D]/20 text-[#C69C6D] flex items-center justify-center font-black text-[9px]">3</span>
+                Upload CSV → Dashboard aktif
               </div>
             </div>
 
